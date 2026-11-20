@@ -1,0 +1,39 @@
+
+# ==========================================
+# AA_Nexus - Git Ignore
+# ==========================================
+
+# Python-Umgebung
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Zugangsdaten und lokale Konfiguration
+.env
+.env.*
+!.env.example
+*.kubeconfig
+kubeconfig*
+*.key
+*.pem
+*credentials*.json
+*secret*.yaml
+*secret*.yml
+.kube/
+
+# Editor und Betriebssystem
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Temporäre Dateien
+*.log
+*.tmp
+*.bak
+
+# Lokale Testdateien
+.coverage
+htmlcov/
