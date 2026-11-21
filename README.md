@@ -1,25 +1,63 @@
-# AA_Nexus – Energiegemeinschaft (VSYS WS 2026/27)
+# EG-AA – Energiegemeinschaft
 
-**Team:** AA · **FH Salzburg** · **Mandant:** `eg-aa` · **Stand:** 20.11.2026
+Projekt im Lehrveranstaltungslabor **Verteilte Systeme und Cloud-Technologien (WS 2026/27)** an der FH Salzburg. Team **AA**, OctoMesh-Mandant **`eg-aa`**.
 
-Dieses Repository dokumentiert die EG-Arbeiten in **Verteilte Systeme und Cloud-Technologien**. Es gibt **zwei getrennte Implementierungsstände**: (1) den im FH-Cluster `cloud-lab` eingesetzten **Tagessummen-Referenzdienst** (Ingress/DNS noch offen) und (2) das **eigene lokale EG-AA-FastAPI-Backend** samt GraphQL-Client, Datenqualitätsprüfung und Demo-Dashboard. Die zweite Anwendung ist noch nicht im FH-Cluster deployed oder formal abgenommen.
+**Stand: 21.11.2026** · [Technische Dokumentation](VSYS_Team_AA_Technische_Dokumentation.md) · [Projektübersicht](VSYS_Team_AA_Projektuebersicht.md)
+
+## Projektziel
+
+Messdaten einer Energiegemeinschaft abrufen, prüfen und für Tagesprofile, Prognosen, Handel und spätere Mitgliederabrechnung bereitstellen. Die Umsetzung erfolgt mit OctoMesh (GraphQL), Python/FastAPI und Kubernetes.
+
+## Aktueller Stand
+
+| Bereich | Nachgewiesen | Noch offen |
+|---|---|---|
+| **FH-Referenzdienst** | `tagessummen` im FH-Namespace `grp-eg-aa` eingerichtet; Abruf über Port-Forward mit API-Key erfolgreich | Externe DNS-/HTTPS-Erreichbarkeit, fachlicher AIT-Vertrag und Abnahme |
+| **Eigenes EG-AA-Backend** | Lokale FastAPI-Anwendung; GraphQL-Ankerliste mit **16 Zählpunkten / 36 Messdaten-Ankern** | Deployment der Eigenanwendung im FH-Cluster |
+| **Datenqualität** | Am **23.10.2026**: **36/36 vollständige** Zeitstempelreihen à 96 Viertelstunden; keine fehlenden, doppelten oder ungültigen Zeitstempel | Prüfung von Energie-/Leistungswerten auf Plausibilität |
+| **API & Sicherheit** | Technischer `X-API-Key`; `/eg/datenqualitaet/gesamt` mit `Depends(authentifiziere_service)`; **200** mit gültigem, **401** ohne Schlüssel; **20 Unit-Tests bestanden** | Individuelle Anmeldung und tatsächliche benutzerbezogene RBAC-Durchsetzung |
+| **Dashboard** | Lokale HTML-Demo über `/dashboard` | Authentifizierte Live-Daten-Anbindung |
+| **Fachintegration** | Vorbereitung und technische Grundlagen | AIT-Prognose, IMC-Handel, Abrechnung, Observability |
+
+**Abgrenzung:** Der **FH-Referenzdienst** und das **eigene lokale EG-AA-Backend** sind unterschiedliche Deployments. Ein erfolgreicher lokaler Test bedeutet nicht, dass die Eigenanwendung im FH-Cluster ausgerollt ist. „Vollständig“ bezieht sich derzeit auf **Zeitstempel**, nicht auf die inhaltliche Richtigkeit der Messwerte.
+
+## Projektstruktur
+
+```text
+eg-aa/
+├── backend/
+│   ├── main.py                  # FastAPI-Endpunkte
+│   ├── octomesh_client.py       # GraphQL-Zugriff
+│   ├── data_quality.py          # Zeitstempel-Prüflogik
+│   ├── eg_data_quality.py       # Prüfung aller Anker
+│   ├── auth.py                  # Technischer API-Key
+│   ├── permissions.py           # Rollen-/Zählpunktregeln
+│   └── test_*.py                # Unit-Tests
+├── frontend/index.html         # Demo-Dashboard
+├── README.md
+├── VSYS_Team_AA_Projektuebersicht.md
+├── VSYS_Team_AA_Technische_Dokumentation.md
+└── GITHUB_UPLOAD.md
+```
+
+## Lokal prüfen
+
+In WSL2/Ubuntu im Projektordner:
+
+```bash
+cd ~/projekte/eg-aa
+source .venv/bin/activate
+PYTHONPATH=backend python -m unittest discover -s backend -p 'test_*.py' -q
+```
+
+Erwarteter zuletzt bestätigter Stand: **20 Tests, OK**. Für den Backend-Start sind die OctoMesh-Konfiguration und der technische API-Key aus Kubernetes erforderlich; den **vollständigen sicheren Start- und Testablauf** enthält die [technische Dokumentation, Kapitel 16](VSYS_Team_AA_Technische_Dokumentation.md#16-betrieb-wiederanlauf-und-diagnose).
 
 ## Dokumentation
 
-- **[Projektübersicht](VSYS_Team_AA_Projektuebersicht.md):** Ziel, Architektur, lokaler/FH-Status, offene Aufgaben, Kurzfassung Schritt 20.
-- **[Technische Dokumentation](VSYS_Team_AA_Technische_Dokumentation.md):** Vollständige historische Schritte, sichere Befehle, Kubernetes, FH-Deployment, Ingress, GraphQL-Recherche, Backend, Datenqualität und Tests.
-- **[GitHub-Anleitung](GITHUB_UPLOAD.md):** Dokumentation ins eigene Repository übernehmen und sicher veröffentlichen.
+- [Projektübersicht](VSYS_Team_AA_Projektuebersicht.md): Auftrag, Architektur, nachgewiesener Stand, offene Arbeiten und wichtige Pfade.
+- [Technische Dokumentation](VSYS_Team_AA_Technische_Dokumentation.md): Aufbau, ausgeführte Übungen, GraphQL-Abfragen, Programmteile, Tests, Fehleranalysen und Wiederanlauf.
+- [GitHub-Anleitung](GITHUB_UPLOAD.md): Änderungen sicher prüfen, committen und pushen.
 
-## Aktueller nachgewiesener lokaler Stand
+## Sicherheit
 
-| Teil | Ergebnis |
-|---|---|
-| Zählpunkte / Messdaten-Anker | 16 / 36, über GraphQL dynamisch ermittelt |
-| Zeitstempelqualität am 23.10.2026 | 36/36 vollständige Viertelstunden-Messreihen |
-| Testabdeckung | 11 Unit-Tests bestanden |
-| Eigene API | `GET /eg/datenqualitaet`, `/eg/datenqualitaet/gesamt` – HTTP 200 mit Key, 401 ohne |
-| Browser-Dashboard | `http://127.0.0.1:8000/dashboard` – lokale Demo, keine Live-Daten |
-| Benutzerbezogene Authentifizierung und RBAC | noch nicht integriert |
-| AIT / IMC / M2 und FH-Deployment der Eigenanwendung | noch offen |
-
-> **Sicherheit:** Diese Dateien enthalten keine Tokens, Passwörter oder privaten kubeconfigs. Live-Energiedaten gehören nicht ohne Benutzerprüfung in ein öffentliches Frontend. Vor Commit und Push immer `git diff --cached` kontrollieren.
+**Keine Secrets, OAuth-Tokens, privaten kubeconfigs oder echten Zugangsdaten committen.** Der gemeinsame `X-API-Key` ist **keine individuelle Benutzeranmeldung**. Das Demo-Dashboard enthält noch keine Live-Energiedaten. Vor jeder Freigabe solcher Daten müssen Authentifizierung, Autorisierung und Zählpunktberechtigungen serverseitig umgesetzt sein.

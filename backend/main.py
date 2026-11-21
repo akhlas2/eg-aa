@@ -24,7 +24,8 @@ import time
 from zoneinfo import ZoneInfo
 
 import httpx
-from fastapi import FastAPI, Header, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+from auth import authentifiziere_service
 
 VERSION = os.environ.get("APP_VERSION", "1.0")
 POD = socket.gethostname()
@@ -217,18 +218,40 @@ def eg_datenqualitaet(
 from eg_data_quality import pruefe_eg_datenqualitaet
 
 
+# @app.get("/eg/datenqualitaet/gesamt")
+# def eg_datenqualitaet_gesamt(
+#     datum: dt.date,
+#     x_api_key: str | None = Header(default=None),
+# ):
+#     """Prüft die Datenqualität aller EG-Messdaten-Anker."""
+
+#     # Zugriff nur mit gültigem API-Key
+#     pruefe_schluessel(x_api_key)
+
+#     try:
+#         ergebnis = pruefe_eg_datenqualitaet(datum)
+#         return {
+#             "mandant": "eg-aa",
+#             **ergebnis,
+#         }
+
+#     except (httpx.HTTPError, RuntimeError):
+#         raise HTTPException(
+#             status_code=502,
+#             detail="OctoMesh-Daten konnten nicht geladen werden",
+#         )
+
+
 @app.get("/eg/datenqualitaet/gesamt")
 def eg_datenqualitaet_gesamt(
     datum: dt.date,
-    x_api_key: str | None = Header(default=None),
+    service_id: str = Depends(authentifiziere_service),
 ):
     """Prüft die Datenqualität aller EG-Messdaten-Anker."""
 
-    # Zugriff nur mit gültigem API-Key
-    pruefe_schluessel(x_api_key)
-
     try:
         ergebnis = pruefe_eg_datenqualitaet(datum)
+
         return {
             "mandant": "eg-aa",
             **ergebnis,
@@ -239,7 +262,6 @@ def eg_datenqualitaet_gesamt(
             status_code=502,
             detail="OctoMesh-Daten konnten nicht geladen werden",
         )
-
 
 
 

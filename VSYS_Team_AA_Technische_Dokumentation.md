@@ -1,33 +1,49 @@
-# Technische Projektdokumentation – Energiegemeinschaft AA
+# EG-AA – Technische Projektdokumentation
 
 **Lehrveranstaltung:** Verteilte Systeme und Cloud-Technologien, FH Salzburg, WS 2026/27  
-**Team:** AA / AA_Nexus · **Fachlicher OctoMesh-Mandant:** `eg-aa`  
-**Dokumentationsstand:** 20. November 2026 (FH-Ingress-Stand plus eigenes lokales AA_Nexus-Backend, GraphQL-Recherche und Demo-Dashboard)  
-**Dokumenttyp:** Technischer Implementierungs-, Test- und Betriebsbericht  
-**Nachweisstatus:** Dokumentierte Terminalausgaben und Funktionstests; **keine formale Abnahme** durch Lehrende oder das Infrastrukturteam.
+**Projekt/Team:** EG-AA (Team AA) · **OctoMesh-Mandant:** `eg-aa`  
+**Stand:** 21.11.2026 · **Status:** Entwicklungsprototyp; keine formale FH-Abnahme des eigenen EG-AA-Backends.
 
-> **Sicherheit:** Diese Dokumentation enthält ausschließlich Ressourcennamen, Konfigurationen ohne Geheimnisse, Beispielbefehle und nicht geheime Diagnoseausgaben. Zugangsdaten, private Schlüssel, Token, der tatsächliche API-Key und vollständige kubeconfig-Dateien dürfen **nicht** in Git eingecheckt werden. Sämtliche in dieser Dokumentation verwendeten Platzhalter sind vor einer Wiederholung mit eigenen, autorisiert erhaltenen Werten zu belegen.
+> **Zweck:** Arbeitsjournal **und** nachvollziehbare Betriebsanleitung. Je Phase steht, **warum** wir sie durchgeführt haben, **was** wir umgesetzt und nachgewiesen haben und **was** noch offen ist. Befehle und funktionierende GraphQL-Abfragen sind zur Wiederholung erhalten.
+
+## Auf einen Blick – Wo stehen wir?
+
+| Bereich | Nachgewiesener Stand | Noch offen |
+|---|---|---|
+| **Phase A–C: lokales Kubernetes** | kind `vsct`, Referenzdienst, Resilienztests und FreeLens | – |
+| **Phase D–F: FH-Infrastruktur** | Clusterzugang, Referenz-Deployment/Service, Security- und Ingress-Objekt | DNS/HTTPS-Erreichbarkeit; FH-Prüfung nach Härtung |
+| **Phase G: eigenes Backend** | OctoMesh `eg-aa`: 16 Zählpunkte, 36 Messdaten-Anker; Qualitätsprüfung über FastAPI mit HTTP 200/401 | Messwert-Plausibilität, Performance/Pagination, eigener FH-Deploy |
+| **Phase H: Dashboard** | HTML-Demo unter `/dashboard`, HTTP 200 | Login-geschützte Live-Datenanzeige |
+| **Phase I: Zugriffsschutz** | 5 RBAC-Tests + 4 Authentifizierungstests; **20/20 Unit-Tests**, Service-Dependency im Gesamt-Endpunkt mit HTTP 200/401 | Individuelle Benutzeranmeldung, tatsächliche HTTP-RBAC-Durchsetzung |
+| **Fachintegration** | Referenz-Tagessummen vorhanden | AIT-Datenvertrag, Prognose, IMC/Handel, Mitgliederabrechnung |
+
+**Zuletzt abgeschlossen:** `GET /eg/datenqualitaet/gesamt` über `Depends(authentifiziere_service)` mit gültigem Schlüssel `200`, ohne Schlüssel `401`; 36/36 Zeitstempelreihen am 23.10.2026 vollständig.  
+**Als Nächstes:** Lokale Änderungen prüfen und auf GitHub sichern; dann eine vertrauenswürdige Benutzeridentität und serverseitige RBAC-Prüfung konzipieren (Kapitel 19).  
+**Repository:** [github.com/akhlas2/eg-aa](https://github.com/akhlas2/eg-aa) – privat.
+
+**Sicherheit:** Nur autorisierte ConfigMaps/Secrets im eigenen Namespace verwenden. Niemals echte Tokens, Zugangsdaten, kubeconfig-Dateien oder API-Keys ins Git-Repository übernehmen. Das aktuelle lokale Demo-Dashboard ist noch **keine** sichere Mitglieder-Weboberfläche.
 
 ## Inhaltsverzeichnis
 
 1. [Aufgabenstellung und Quellen](#1-aufgabenstellung-und-quellen)
 2. [Technische Gesamtübersicht](#2-technische-gesamtübersicht)
 3. [Verzeichnisstruktur und Ressourceninventar](#3-verzeichnisstruktur-und-ressourceninventar)
-4. [Phase A – Lokale kind-Umgebung](#4-phase-a--lokale-kind-umgebung)
-5. [Phase B – Lokale Kubernetes-Übungen und Nachweise](#5-phase-b--lokale-kubernetes-übungen-und-nachweise)
-6. [Phase C – FreeLens und Bereinigung alter Kontexte](#6-phase-c--freelens-und-bereinigung-alter-kontexte)
-7. [Phase D – FH-Kubernetes-Onboarding und WSL-/VPN-Netzwerk](#7-phase-d--fh-kubernetes-onboarding-und-wsl-vpn-netzwerk)
-8. [Phase E – FH-Deployment und Funktionsnachweis](#8-phase-e--fh-deployment-und-funktionsnachweis)
-9. [Phase F – Sicherheitshärtung und Ingress](#9-phase-f--sicherheitshärtung-und-ingress)
-10. [Fehleranalyse: DNS-/Ingress-Erreichbarkeit](#10-fehleranalyse-dns-ingress-erreichbarkeit)
-11. [Gesamtnachweise, offener Stand und nächste Schritte](#11-gesamtnachweise-offener-stand-und-nächste-schritte)
-12. [Reproduzierbarkeit, Betrieb und sichere Bereinigung](#12-reproduzierbarkeit-betrieb-und-sichere-bereinigung)
-13. [Quellen und Abgrenzungen](#13-quellen-und-abgrenzungen)
-14. [Phase G – Eigenes lokales EG-AA-Backend (Schritt 20)](#14-phase-g--eigenes-lokales-eg-aa-backend-schritt-20)
-15. [GraphQL-Recherche: Welche Abfragen, wofür und was gefunden?](#15-graphql-recherche-welche-abfragen-wofür-und-was-gefunden)
-16. [Datenqualität und End-to-End-Tests](#16-datenqualität-und-end-to-end-tests)
-17. [Lokaler Betrieb: vollständige Befehle](#17-lokaler-betrieb-vollständige-befehle)
-18. [Frontend, Sicherheit, Fehlerdiagnose und offene Arbeiten](#18-frontend-sicherheit-fehlerdiagnose-und-offene-arbeiten)
+4. [Phase A – Lokale kind-Umgebung](#4-phase-a-lokale-kind-umgebung)
+5. [Phase B – Lokale Kubernetes-Übungen und Nachweise](#5-phase-b-lokale-kubernetes-übungen-und-nachweise)
+6. [Phase C – FreeLens und Bereinigung alter Kontexte](#6-phase-c-freelens-und-bereinigung-alter-kontexte)
+7. [Phase D – FH-Kubernetes-Onboarding und WSL-/VPN-Netzwerk](#7-phase-d-fh-kubernetes-onboarding-und-wsl-vpn-netzwerk)
+8. [Phase E – FH-Deployment und Funktionsnachweis](#8-phase-e-fh-deployment-und-funktionsnachweis)
+9. [Phase F – FH-Sicherheit und Ingress](#9-phase-f-fh-sicherheit-und-ingress)
+10. [Phase F – Fehlerdiagnose für FH-DNS und Ingress](#10-phase-f-fehlerdiagnose-für-fh-dns-und-ingress)
+11. [Phase G – Eigenes lokales EG-AA-Backend](#11-phase-g-eigenes-lokales-eg-aa-backend)
+12. [Phase G – GraphQL-Recherche und Messdaten-Zuordnung](#12-phase-g-graphql-recherche-und-messdaten-zuordnung)
+13. [Phase G – Datenqualität und End-to-End-Tests](#13-phase-g-datenqualität-und-end-to-end-tests)
+14. [Phase H – Frontend-Dashboard](#14-phase-h-frontend-dashboard)
+15. [Phase I – Rollenmodell und technische Authentifizierung](#15-phase-i-rollenmodell-und-technische-authentifizierung)
+16. [Betrieb, Wiederanlauf und Diagnose](#16-betrieb-wiederanlauf-und-diagnose)
+17. [Historischer FH-Zwischenstand vom 19.11.2026](#17-historischer-fh-zwischenstand-vom-19112026)
+18. [Quellen und Nachweisgrenzen](#18-quellen-und-nachweisgrenzen)
+19. [Aktueller Entwicklungsstand, GitHub und nächste Schritte](#19-aktueller-entwicklungsstand-github-und-nächste-schritte)
 
 ---
 
@@ -759,7 +775,7 @@ WSL-curl + X-API-Key
 
 ---
 
-## 9. Phase F – Sicherheitshärtung und Ingress
+## 9. Phase F – FH-Sicherheit und Ingress
 
 ### 9.1 PodSecurity-Anforderungen nachtragen
 
@@ -888,7 +904,7 @@ kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
 
 ---
 
-## 10. Fehleranalyse: DNS-/Ingress-Erreichbarkeit
+## 10. Phase F – Fehlerdiagnose für FH-DNS und Ingress
 
 ### 10.1 Symptom: DNS-Auflösung nicht vorhanden
 
@@ -960,172 +976,15 @@ Bis zur Klärung wurden **keine** Hosts-Datei-Workarounds, Zertifikatsabschaltun
 
 ---
 
-## 11. Gesamtnachweise, offener Stand und nächste Schritte
+## 11. Phase G – Eigenes lokales EG-AA-Backend
 
-### 11.1 Statusmatrix (Stand: 19.11.2026)
+### 11.1 Warum zusätzlich zum Lehr-Referenzdienst?
 
-| Teilaufgabe | Status | Beleg / Einschränkung |
-|---|---|---|
-| Lehr-Repository/Beispiel identifiziert | **Erledigt** | `beispiele/tagessummen/README.md`, `docs/08-team-energiegemeinschaft.md` |
-| Eigener OctoMesh-Mandant | **Erledigt** | `eg-aa`, GraphQL-Daten erfolgreich verwendet |
-| Lokales kind-Cluster | **Erledigt** | `vsct`, drei Nodes |
-| Lokales Deployment/Service/Secrets | **Erledigt** | Zwei bereite Pods, Secret und ConfigMap |
-| Lokale Tagessummen und Negativtest | **Erledigt** | `200` mit Key, `401` ohne Key |
-| Quota-/Selbstheilungs-/Skalierungsübung | **Erledigt** | Lokal beobachtete Reaktionen |
-| Worker-Ausfalltest | **Erledigt** | Nur lokal; Node wiederhergestellt |
-| Fehlerimage und Rollback | **Erledigt** | 25.10.: 96 statt 100 Intervalle erkannt und zurückgerollt |
-| Readiness-Fehlertest | **Erledigt** | Separater Test-Pod `0/1`, HTTP 503; aufgeräumt |
-| FreeLens-Anbindung | **Erledigt** | kind-Workloads sichtbar |
-| FH-VPN und kubeconfig | **Erledigt** | WSL Mirrored Networking, Clusterzugang, `can-i create deployments=yes` |
-| FH-ConfigMap + Secret | **Erledigt** | `DATA 4` / `DATA 3` im Namespace `grp-eg-aa` |
-| FH-Deployment + Service | **Erledigt** | FastAPI-Pod und Service erfolgreich getestet |
-| FH-End-to-End-API | **Erledigt** | Okt.-Messwerte: `HTTP 200`; Negativtest: `401` |
-| FH-PodSecurity-Konfiguration | **Erledigt, operativ zu beobachten** | Server-Dry-Run ohne Warnung, neuer Pod `1/1 Running` |
-| FH-Ingress-Objekt | **Erledigt** | NGINX Ingress angelegt, Sync-Events |
-| DNS-Auflösung / HTTPS von extern | **Offen** | NXDOMAIN, TCP/443-Timeout gegen Controller-Adresse |
-| Erneuter E2E-Test nach Security-Rollout | **Noch ausständig** | Neuer Pod läuft; vollständiger Tagessummen-Test nach Austausch nicht eigens protokolliert |
-| AIT-Datenvertrag, rollenbasierte API | **Offen** | Beispiel-Key allein nicht ausreichend |
-| Dash0/OpenTelemetry, Betriebsnachweise | **Offen** | Keine durchgängige Observability nachgewiesen |
-| Eigener EG-Fachbackend-Code | **Teilweise / offen** | Referenz-FastAPI verwendet; eigene Geschäftslogik/Datenverträge fehlen |
-| AIT-Prognose, Tagesposition, IMC, Abrechnung | **Offen** | Noch keine durchgängige fachliche Integration |
-
-### 11.2 Priorisierte nächste Arbeiten
-
-**Priorität 1 – FH-Ingress/DNS klären:** Das Infra-Team sollte die vorgesehenen DNS- und Routing-Einstellungen für `eg-aa-tagessummen.machasing.com` bestätigen. Die fehlende Erreichbarkeit sollte nicht durch Änderungen am funktionierenden FastAPI-Deployment überdeckt werden.
-
-**Priorität 2 – Deployment reproduzierbar versionieren:** Die FH-Variante des Deployments mit `securityContext` und ohne lokalen 30-Sekunden-Tolerations-Test ist als **nicht geheime** Datei bzw. Kustomize-Overlay ins eigene Team-Repository zu übernehmen. Die momentanen Dateien unter `/tmp` sind nur lokale Arbeitsdateien und können verloren gehen.
-
-**Priorität 3 – Funktionsprüfung nach Rollout wiederholen:** Der neue gehärtete Pod soll erneut über `/healthz`, `/readyz` und den geschützten `/tagessummen`-Endpunkt geprüft werden. Ein Test ohne API-Key muss weiterhin `401` ergeben.
-
-**Priorität 4 – M2-Fachvertrag mit AIT:** Es sind gemeinsam **Felder, Einheiten (kWh), Zeitzone, Datumssemantik, Tagesprofil/Tagessumme, Fehlwerte, Qualität, Nachmeldungen, Fehlerstatus und Beispieldaten** festzulegen. Mit AIT ist ein tatsächlich autorisierter Client und ein Konformitätstest zu vereinbaren.
-
-**Priorität 5 – Rollenbasierte Zugriffskontrolle:** Statt des statischen Übungskeys muss der Dienst die Identität/Rolle/Mandantenzugehörigkeit des Aufrufers prüfen (oder eine vom Projekt vorgesehene Pipeline mit `requiredRoles` verwenden). Zugriffe ohne Berechtigung und mit fremden EG-Rechten müssen verlässlich abgelehnt und nachweisbar protokolliert werden.
-
-**Priorität 6 – Weiterer EG-Funktionsumfang:** Zählpunkt-/Mitgliederdaten, Datenqualität, Tagesbilanz, AIT-Prognose, eine Tagesposition pro Liefertag, IMC-Datenvertrag und -Integration, Mitgliederabrechnung, Dashboard, automatisierte Tests sowie OpenTelemetry/dash0 sind als eigenständige Arbeitspakete zu planen und umzusetzen.
-
-### 11.3 Abnahmekriterien für den nächsten technischen Zwischenstand
-
-- [x] `cloud-lab` ist mit persönlicher kubeconfig über FH-VPN erreichbar.
-- [x] Dienst läuft im eigenen Namespace `grp-eg-aa`.
-- [x] Container startet als Nicht-Root und besteht Kubernetes-Readiness.
-- [x] Service beantwortete authentifizierte Tagessummen-Anfragen über `port-forward`.
-- [x] Unauthentifizierte Abfrage wurde mit `401` abgelehnt.
-- [ ] HTTPS-FQDN wird korrekt aufgelöst und ein **gültiges TLS-Zertifikat** nachgewiesen.
-- [ ] HTTPS-Anfrage erreicht den Ingress und liefert `/healthz` mit HTTP 200.
-- [ ] AIT-Datenvertrag und Rollenprüfung sind umgesetzt, dokumentiert und mit dem Partnerteam getestet.
-- [ ] End-to-End-Logs/Traces/Metriken sind in der vorgegebenen Observability-Lösung nachgewiesen.
-
----
-
-## 12. Reproduzierbarkeit, Betrieb und sichere Bereinigung
-
-### 12.1 Lesende Zustandsprüfungen – lokal
-
-```bash
-kind get clusters
-kubectl --context kind-vsct get nodes
-kubectl --context kind-vsct -n grp-uebung \
-  get deployments,pods,services,configmaps,secrets
-```
-
-### 12.2 Lesende Zustandsprüfungen – FH
-
-```bash
-kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
-  get deployments,pods,services,configmaps,secrets,ingresses
-kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
-  rollout status deployment/tagessummen --timeout=120s
-kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
-  describe ingress tagessummen
-```
-
-Der `describe ingress`-Befehl kann wegen fehlender Berechtigung zum Auflisten von `EndpointSlices` eine Warnung zeigen. Diese wird nicht automatisch als Ausfall des Dienstes interpretiert.
-
-### 12.3 Port-Forwarding bei Bedarf
-
-```bash
-# FH-Test in einem eigenen Terminal:
-kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
-  port-forward svc/tagessummen 8081:80
-
-# Aus einem weiteren Terminal, ohne API-Key-Ausgabe:
-curl -i http://127.0.0.1:8081/healthz
-curl -i http://127.0.0.1:8081/readyz
-```
-
-Der laufende `port-forward`-Prozess ist ein temporärer Tunnel. Er kann mit `Ctrl+C` beendet werden. Wird der Ziel-Pod neu erstellt, kann es nötig sein, den Tunnel erneut zu starten.
-
-### 12.4 Rückbauoptionen (nur nach ausdrücklicher Entscheidung)
-
-Weder der lokale noch der FH-Cluster muss für eine normale Codeaktualisierung gelöscht werden. Bei einem gewünschten **selektiven Rückbau der eigenen FH-Beispielressourcen** können diese einzeln entfernt werden – **nur mit ausdrücklich bestätigtem Zielcluster und Namespace**:
-
-```bash
-# DOKUMENTATION – NICHT ungeprüft ausführen:
-kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
-  delete ingress tagessummen
-kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
-  delete service tagessummen
-kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
-  delete deployment tagessummen
-# ConfigMap und Secret nur löschen, wenn sie sicher nicht mehr benötigt werden.
-```
-
-**Niemals:** den bereits bereitgestellten Namespace `grp-eg-aa`, andere Team-Namensräume, FH-Knoten oder fremde Dienste löschen. Lokale destruktive Übungen sind kein zulässiger FH-Betriebsschritt.
-
-### 12.5 Dateien, die nicht nach GitHub gehören
-
-Beispiele für auszuschließende Dateien/Artefakte:
-
-```gitignore
-# Lokale Kubernetes-Zugangsdaten und Secret-Dateien
-.kube/
-*.kubeconfig
-kubeconfig*
-*secret*.env
-.env
-.env.*
-
-# Persönliche Schlüssel und Zertifikate
-*.key
-*.p12
-*.pfx
-
-# Lokale Python-Artefakte
-__pycache__/
-*.pyc
-```
-
-Vor jedem Commit ist mit `git status` und `git diff --cached` zu kontrollieren, dass **keine tatsächlichen Zugangsdaten** enthalten sind. Eine `.gitignore` schützt nicht automatisch Dateien, die bereits in Git aufgenommen wurden.
-
----
-
-## 13. Quellen und Abgrenzungen
-
-**Primärquellen – Aufgabenstellung und Beispielcode:**
-
-- [Lehr-Repository `fhgerald/vsct-lab-studierende`](https://github.com/fhgerald/vsct-lab-studierende)
-- [Tagessummen-Referenz und kind-Übungen](https://github.com/fhgerald/vsct-lab-studierende/tree/main/beispiele/tagessummen)
-- [Team Energiegemeinschaft: Aufgaben und M2](https://github.com/fhgerald/vsct-lab-studierende/blob/main/docs/08-team-energiegemeinschaft.md)
-- [Kubernetes und Namespace-Schichten](https://github.com/fhgerald/vsct-lab-studierende/blob/main/docs/12-kubernetes-uebersicht.md)
-- [Zugang und Umgang mit Geheimnissen](https://github.com/fhgerald/vsct-lab-studierende/blob/main/docs/02-zugang.md)
-- Zusätzlich verwendete Lehrunterlagen: Energiegemeinschaften, FH-Cluster-Onboarding, Kubernetes-Übungsunterlagen und Vorlesungsskript *Verteilte Systeme und Cloud-Technologien* WS 2026/27.
-
-**Beweisgrundlage dieser Dokumentation:** Die als „nachgewiesen“ gekennzeichneten Ergebnisse wurden aus den im Arbeitsverlauf geteilten `kubectl`-, `docker`-, `curl`- und PowerShell-Ausgaben sowie Screenshots übernommen. **Nicht jedes später beispielhaft gezeigte Kommando ist ein wortwörtlicher Mitschnitt aus einem Shell-Verlauf.** Beispielsweise sind die Befehle zur erneuten Secret-Erstellung und zur Pod-Selbstheilung ausdrücklich als sichere Reproduktionsbeispiele dargestellt. Nicht vorliegende Log-Dateien, Manifeststände und genaue Zeitmessungen wurden nicht erfunden.
-
-**Aktueller Abschlussbefund:** Die Container-/Kubernetes-Bereitstellung und der fachliche OctoMesh-Abruf sind bis einschließlich eines erfolgreichen FH-API-Funktionstests nachgewiesen. Der nächste technische Engpass ist die **noch nicht funktionierende DNS-/HTTPS-Erreichbarkeit** der bereits angelegten Ingress-Adresse. Die eigentliche M2-Rollen-/AIT-Integration sowie weitere EG-Fachanforderungen sind noch offen.
-
-
----
-
-## 14. Phase G – Eigenes lokales EG-AA-Backend (Schritt 20)
-
-### 14.1 Warum zusätzlich zum Lehr-Referenzdienst?
-
-Der ältere Bericht (Abschnitte 1–13) dokumentiert die **Lehrvorlage `beispiele/tagessummen`** und deren lokale/FH-Kubernetes-Deployments. Schritt 20 entwickelte darüber hinaus **eigenen Team-Code** unter `~/projekte/eg-aa`. Dieser Code wurde **nur lokal** über Uvicorn ausgeführt; ein Deployment des eigenen Backend-Codes auf den FH-Cluster ist **noch nicht belegt**.
+Die vorherigen Phasen A–F dokumentiert die **Lehrvorlage `beispiele/tagessummen`** und deren lokale/FH-Kubernetes-Deployments. Im weiteren Projektverlauf entstand darüber hinaus **eigenen Team-Code** unter `~/projekte/eg-aa`. Dieser Code wurde **nur lokal** über Uvicorn ausgeführt; ein Deployment des eigenen Backend-Codes auf den FH-Cluster ist **noch nicht belegt**.
 
 Das Team benötigt für M2 und spätere AIT-Prognosen belastbare, dem richtigen Zählpunkt zugeordnete Messdaten. Eine aggregierte Zeilenanzahl von z. B. 1152 über mehrere Zählpunkte reicht für eine Vollständigkeitsprüfung nicht: geprüft werden muss **pro Messdaten-Anker / Register** auf dem richtigen lokalen Kalendertag.
 
-### 14.2 Arbeitsstruktur
+### 11.2 Arbeitsstruktur
 
 ```text
 ~/projekte/eg-aa/
@@ -1138,7 +997,10 @@ Das Team benötigt für M2 und spätere AIT-Prognosen belastbare, dem richtigen 
 │   ├── eg_data_quality.py      # Prüfung aller Messdaten-Anker
 │   ├── test_data_quality.py    # Tests inkl. Zeitumstellungen
 │   ├── test_zeitstempel.py     # Tests gegen Lücken/Duplikate
-│   └── permissions.py          # nur vorgeschlagen; Existenz noch nicht bestätigt
+│   ├── permissions.py          # RBAC-Regeln (5 Tests bestanden)
+│   ├── test_permissions.py     # RBAC-Tests
+│   ├── auth.py                 # technische API-Key-Authentifizierung
+│   └── test_auth.py            # Authentifizierungstests
 ├── frontend/
 │   └── index.html              # Demo; keine Live-Daten
 └── docs/                       # vorgesehener Platz für Teamdokumentation
@@ -1146,7 +1008,7 @@ Das Team benötigt für M2 und spätere AIT-Prognosen belastbare, dem richtigen 
 
 `main.py` wurde aus dem Referenzcode erweitert, nicht von Grund auf neu geschrieben. Die Trennung der Verantwortlichkeiten: `octomesh_client.py` liest OctoMesh; `data_quality.py` prüft einen Strom; `eg_data_quality.py` orchestriert die Gesamtprüfung; `main.py` bietet HTTP an; `frontend/index.html` zeigt das Dashboard.
 
-### 14.3 Technischer Datenfluss
+### 11.3 Technischer Datenfluss
 
 ```mermaid
 flowchart TD
@@ -1166,12 +1028,13 @@ Zeitzonen- und Lückenprüfung]
 ```
 
 **Drei lokale Ports:** `8000` = eigenes FastAPI-Backend und `/dashboard`; `8082` = lokaler Kubernetes-`tagessummen`-Service via Port-Forward; `5500` = separater einfacher HTML-Testserver (nach FastAPI-Integration optional). Nicht mit FH-Forward `8081` aus dem älteren Abschnitt verwechseln.
+---
 
-## 15. GraphQL-Recherche: Welche Abfragen, wofür und was gefunden?
+## 12. Phase G – GraphQL-Recherche und Messdaten-Zuordnung
 
 **Fragestellung:** Wie findet der eigene Dienst **ohne manuell hardcodierte Anker-IDs** alle Messreihen, ihre OBIS-Register und den übergeordneten Zählpunkt? Die GraphQL-Introspektion war dafür ein **Schema-Lesevorgang**, keine produktive Datenänderung. Die Abfragen wurden im OctoMesh-Editor des Mandanten `eg-aa` ausgeführt.
 
-### 15.1 Die Recherche in sechs Erkenntnissen
+### 12.1 Die Recherche in sechs Erkenntnissen
 
 | Schritt | Recherche / Abfrage | Ergebnis / Bedeutung |
 |---|---|---|
@@ -1184,7 +1047,7 @@ Zeitzonen- und Lückenprüfung]
 
 **Wichtige Unterscheidung:** Die Entität heißt `BasicEnergyMeteringPoint`; die `parent`-Union eines `BasicEnergyEnergyMeasurement` liefert hier aber **Consumer-/Producer-Objekte**, auf denen `meteringPointNumber` und `name` verfügbar sind. Deshalb war die korrigierte Fragmentabfrage nötig.
 
-### 15.2 Erfolgreiche Anker- und Parent-Abfrage (tatsächlich getestet)
+### 12.2 Erfolgreiche Anker- und Parent-Abfrage (tatsächlich getestet)
 
 ```graphql
 query {
@@ -1228,7 +1091,7 @@ query {
 
 Die IDs sind **Beispielwerte aus dem Testmandanten**, keine allgemeingültigen Kennungen. Für andere Mandanten die IDs dynamisch ermitteln. `first: 100` genügte für diese 36 Anker; bei größerem Bestand muss über `endCursor` paginiert werden. Die Implementierung bricht bei `hasNextPage=true` derzeit absichtlich ab, statt still eine unvollständige Liste zu verwenden.
 
-### 15.3 Erfolgreiche Zeitstempel-Abfrage für *einen* Anker
+### 12.3 Erfolgreiche Zeitstempel-Abfrage für *einen* Anker
 
 Für die individuelle Qualität zählt nicht nur eine SUM- oder COUNT-Aggregation, sondern die Liste der **tatsächlichen Zeitstempel**. Der `streamData.transientStreamDataQuery.simple`-Zugriff auf das Archiv `ec0000000000000000000a01` und einen `rtId` ist dafür nachgewiesen. Die Antwortstruktur lautet `simple.items[0].rows.items[*].timestamp` mit `totalCount` und `pageInfo.hasNextPage`.
 
@@ -1264,19 +1127,20 @@ query {
 
 **Grenzfall Sommer-/Winterzeit:** Normaler Kalendertag = `96` Intervalle; Tag der Umstellung auf Sommerzeit = `92`; Tag der Umstellung auf Winterzeit = `100`. Ein aus mehreren Ankern aggregierter Wert wie `1152` ist **kein** Beweis, dass ein einzelner Zählpunkt vollständig ist.
 
-### 15.4 Nicht funktionierende / vermiedene Abfragen
+### 12.4 Nicht funktionierende / vermiedene Abfragen
 
 `TimeRange.Start` / `TimeRange.End` waren keine gültigen `columnPaths` im verwendeten Stream-Archiv; `timestamp` war dagegen im `StreamDataQueryRow` vorhanden. Eine versuchte `sortOrder`-Angabe mit `attributePath: "timestamp"` schlug fehl. Die Python-Prüfung vergleicht deshalb Zeitstempel gegen die erwarteten UTC-Intervallenden und darf sich nicht blind auf Ergebnisreihenfolge verlassen.
+---
 
-## 16. Datenqualität und End-to-End-Tests
+## 13. Phase G – Datenqualität und End-to-End-Tests
 
-### 16.1 Fachliche Qualitätsregeln
+### 13.1 Fachliche Qualitätsregeln
 
 `data_quality.py` implementiert `erwartete_intervalle(datum)`, eine einfache Zählwertprüfung sowie `pruefe_zeitstempel(datum, zeitstempel)` mit UTC-Datumssemantik und lokaler Zeitzone Wien. Untersucht werden: erwartete/vorhandene/eindeutige Werte, fehlende Intervalle, doppelte Zeitstempel, ungültige außerhalb des erwarteten 15-Minuten-Rasters und `vollstaendig`.
 
 `eg_data_quality.py` ruft `lade_messdaten_anker()` auf und prüft anschließend jeden der 36 Anker einzeln mit `lade_zeitstempel()` und `pruefe_zeitstempel()`. Bei einem Einzelabruf-Fehler wird dieser Anker als `fehler` gezählt, anstatt die ganze Übersicht als vollständig auszugeben.
 
-### 16.2 Nachgewiesene Tests am 20.11.2026
+### 13.2 Nachgewiesene Tests am 20.11.2026
 
 | Test | Nachgewiesenes Resultat |
 |---|---|
@@ -1293,7 +1157,7 @@ query {
 
 **Aussagegrenze:** Die 36 Reihen waren für **einen** konkreten Tag auf Zeitstempel-Ebene vollständig; dies gilt nicht automatisch für andere Tage oder für inhaltliche Messwerte. Die Token-Anfrage und GraphQL-Antworten können zudem bei wachsendem Datenvolumen langsam werden: derzeit bis zu 36 separate authentifizierte Stream-Requests.
 
-### 16.3 Eigene Endpunkte (lokal)
+### 13.3 Eigene Endpunkte (lokal)
 
 | Route | Zweck | Status |
 |---|---|---|
@@ -1305,10 +1169,207 @@ query {
 | `/dashboard` | HTML-Demo, ohne Live-Daten | 200 getestet |
 
 Die gezeigten API-Endpunkte nutzen einen **gemeinsamen statischen `X-API-Key`**, wo im Code ein Key-Check implementiert wurde. Dies ist **kein Benutzerlogin, kein RBAC** und keine nachgewiesene Beschränkung auf bestimmte Anker oder Mandanten. `anker_id` ist bisher ein unbeschränkter Query-Parameter, der vor Produktivbetrieb autorisiert werden muss.
+---
 
-## 17. Lokaler Betrieb: vollständige Befehle
+## 14. Phase H – Frontend-Dashboard
 
-### 17.1 Umgebung und Unit-Tests
+### 14.1 Ziel und Umsetzung
+
+**Warum:** Die EG soll Zählpunkte und Datenqualität übersichtlich sehen, statt JSON-Antworten im Terminal zu lesen. Die Weboberfläche wurde zunächst als **Demo** gebaut, um Darstellung und Bereitstellung zu testen, ohne geschützte Messdaten im Browser offenzulegen.
+
+- **Datei:** `frontend/index.html`, HTML/CSS/JavaScript ohne Framework; responsive Kennzahlenkarten und Tabelle.
+- **Anzeige:** 16 Zählpunkte, 36 Anker und 36 vollständige Messreihen als **fest codierte Ergebnisse** des Testtags 23.10.2026; einzelne Beispiel-Zählpunkte in der Tabelle.
+- **Separate Vorschau:** Python-Testserver auf `127.0.0.1:5500`.
+- **Einbindung:** `GET /dashboard` in `backend/main.py` liefert mit `FileResponse` die HTML-Datei über dieselbe FastAPI auf Port `8000`.
+- **Nachweis:** Browser-Screenshots und `GET /dashboard` mit `HTTP 200`; `GET /favicon.ico` mit `404` war nur das fehlende Tab-Symbol.
+
+### 14.2 Sicherheit und Grenzen
+
+Das Dashboard ruft **noch keine Live-Daten** aus den geschützten Endpunkten ab. Der gemeinsame `X-API-Key`, OAuth-Client-Secret oder Tokens dürfen **nicht** im Frontend-JavaScript stehen. Vor der echten Datenanzeige sind geprüfte Benutzeranmeldung, rollenbezogene Autorisierung und serverseitige Filterung auf erlaubte Zählpunkte nötig (Phase I). Die spätere Optimierung der 36 Einzel-GraphQL-Abfragen ist ebenfalls offen.
+
+**Lokal öffnen:** `http://127.0.0.1:8000/dashboard`; separater HTML-Test unter `http://127.0.0.1:5500` nur bei gestartetem Testserver. Die vollständigen Startbefehle stehen in Kapitel 16.
+
+### 14.3 Nachweis und Abgrenzung
+
+Die angezeigten Kennzahlen stammen aus dem erfolgreichen Test vom 20.11.2026 und sind im HTML **Demo-Werte**, kein Live-Status. Das eigene FastAPI-Backend lief lokal; ein produktives Deployment dieser eigenen EG-AA-Implementierung im FH-Cluster ist nicht nachgewiesen.
+---
+
+## 15. Phase I – Rollenmodell und technische Authentifizierung
+
+**Nachweisstand:** 21.11.2026, anhand der tatsächlich geteilten Python-Dateien und Terminal-/HTTP-Ausgaben. Der alte Planstand „RBAC nur vorgeschlagen“ ist durch die bestandenen Tests überholt.
+
+### 15.1 Wiederaufnahme der Umgebung nach der Unterbrechung
+
+**Warum:** Nach einem Arbeitstag prüfen, ob Projekt, Git-Remote und Kubernetes weiterhin bereitstehen, ohne bereits erledigte Installations- und Infrastrukturarbeiten zu wiederholen.
+
+```bash
+cd ~/projekte/eg-aa
+ls -la backend/
+git status -sb
+kubectl config current-context
+kubectl --context kind-vsct -n grp-uebung get deployments,services
+```
+
+**Beobachtet:** `git status -sb` zeigte `## main...origin/main` (damals keine offenen Änderungen). Kubernetes-Kontext `kind-vsct`; Namespace `grp-uebung`; Deployment `tagessummen` **2/2**, Service `tagessummen` vorhanden. Eine `backend/permissions.py` fehlte noch. Das lokale Projekt unter `~/projekte/eg-aa` war vorhanden. Für reine Git-/kubectl-Befehle ist eine aktive `.venv` **nicht** erforderlich.
+
+```bash
+source .venv/bin/activate
+PYTHONPATH=backend python -m unittest discover -s backend -p 'test_*.py' -v
+```
+
+**Ergebnis vor neuen Änderungen:** alle **11** Datenqualitäts-Tests bestanden. Die `.venv` gilt jeweils nur für das aktuelle Terminal.
+
+### 15.2 Schritt 20.98 – RBAC-Regeln als reine Python-Logik
+
+**Warum:** EG-Administratoren benötigen die gesamte Übersicht, einzelne Mitglieder dürfen ausschließlich ihre zugewiesenen Zählpunkte sehen. Es ist wichtig, **Zählpunkt-rtId** und **Messdaten-Anker-rtId** zu unterscheiden: Die Berechtigung bezieht sich auf den übergeordneten Zählpunkt.
+
+**Datei:** `backend/permissions.py` (vom Nutzer als gespeichert bestätigt).
+
+```python
+from dataclasses import dataclass
+from enum import Enum
+
+class Rolle(str, Enum):
+    ADMIN = 'admin'
+    MITGLIED = 'mitglied'
+
+@dataclass
+class Benutzer:
+    benutzer_id: str
+    rolle: Rolle
+    erlaubte_zaehlpunkte: set[str]
+
+def darf_gesamtuebersicht_sehen(benutzer: Benutzer) -> bool:
+    return benutzer.rolle == Rolle.ADMIN
+
+def darf_zaehlpunkt_sehen(benutzer: Benutzer, zaehlpunkt_id: str) -> bool:
+    return benutzer.rolle == Rolle.ADMIN or (
+        benutzer.rolle == Rolle.MITGLIED
+        and zaehlpunkt_id in benutzer.erlaubte_zaehlpunkte
+    )
+```
+
+**Wichtig:** Dies ist ausschließlich Entscheidungslogik; `Benutzer` darf nicht anhand eines vom Browser frei gelieferten Rollen-Parameters erzeugt werden. Die Benutzeridentität muss aus einer geprüften Authentifizierung stammen.
+
+### 15.3 Schritt 20.99 – Tests für die Rollenlogik
+
+**Datei:** `backend/test_permissions.py`. Getestet wurden fünf Fälle: Admin sieht Gesamtübersicht; Mitglied sieht keine Gesamtübersicht; Mitglied sieht erlaubten Zählpunkt; Mitglied sieht fremden Zählpunkt nicht; Admin sieht alle Zählpunkte. Test-IDs sind künstlich (`zaehlpunkt-001` / `-002`), keine echten Stromdaten.
+
+```bash
+PYTHONPATH=backend python -m unittest discover -s backend -p 'test_*.py' -v
+```
+
+**Beobachtet:** 5 neue Tests erfolgreich; **16 von 16** insgesamt bestanden.
+
+### 15.4 Schritt 21.0 – Was die bestehende `main.py` tatsächlich leistet
+
+Zur Integrationsplanung wurde die vollständige Datei `backend/main.py` im Gespräch bereitgestellt. Sie enthielt **acht Endpunkte**:
+
+| Route | Zweck | Stand der Prüfung |
+|---|---|---|
+| `GET /tagessummen` | Historische Tagesregisterwerte | bisherige `pruefe_schluessel` |
+| `GET /healthz` | Liveness | kein API-Key |
+| `GET /readyz` | Readiness | kein API-Key |
+| `GET /datenqualitaet/test` | lokaler Anzahl-Test | kein API-Key |
+| `GET /eg/tagessummen` | Abfrage des Kubernetes-Referenzdiensts | bisherige `pruefe_schluessel` |
+| `GET /eg/datenqualitaet` | Zeitstempelprüfung eines Ankers | bisherige `pruefe_schluessel` |
+| `GET /eg/datenqualitaet/gesamt` | Zeitstempelprüfung aller Anker | ab Schritt 21.3 `Depends(authentifiziere_service)` |
+| `GET /dashboard` | Auslieferung HTML-Demo | kein Benutzerlogin, Demo-Daten |
+
+**AuthN** (Authentifizierung) beantwortet „Wer greift zu?“, **AuthZ** (Autorisierung) „Wozu ist diese Identität berechtigt?“. Der bestehende `X-API-Key` ist ein gemeinsam genutzter **technischer** Schlüssel; er identifiziert keinen einzelnen Menschen und legitimiert noch keine Rolle `admin`/`mitglied`.
+
+### 15.5 Schritte 21.1–21.2 – Zentraler Service-Key und vier Tests
+
+**Warum:** Einmalige, wiederverwendbare Prüfung des technischen `X-API-Key` statt wiederholter, manueller Prüfung in jeder Route. Die Umgebungsvariable wird serverseitig gelesen; kein Secret im Python-Quelltext.
+
+**Datei:** `backend/auth.py` (gespeichert und getestet). Kernfunktion:
+
+```python
+import os
+import secrets
+from fastapi import Header, HTTPException
+
+def authentifiziere_service(x_api_key: str | None = Header(default=None)) -> str:
+    erwarteter_key = os.environ.get('API_KEY', '')
+    if (not erwarteter_key or not x_api_key
+            or not secrets.compare_digest(x_api_key, erwarteter_key)):
+        raise HTTPException(status_code=401, detail='X-API-Key fehlt oder ist falsch')
+    return 'eg-aa-service'
+```
+
+`'eg-aa-service'` ist eine **technische Client-Kennung**, keine verifizierte Benutzer-ID. `backend/test_auth.py` verwendet einen künstlichen Testschlüssel und prüft **vier** Fälle: gültig, falsch, fehlend und keine serverseitige Schlüsselkonfiguration.
+
+```bash
+PYTHONPATH=backend python -m unittest discover -s backend -p 'test_*.py' -v
+```
+
+**Beobachtet:** 4 neue Tests; **20 von 20** insgesamt erfolgreich.
+
+### 15.6 Schritt 21.3 – Erste Integration in die FastAPI
+
+**Warum:** FastAPI-Dependencies validieren den Service-Schlüssel **vor** dem eigentlichen Aufruf der Gesamt-Datenqualitätsprüfung; alle anderen Routen bleiben zur Risikominimierung vorerst unverändert.
+
+In `backend/main.py` wurde `Depends` und `authentifiziere_service` importiert und **nur** der Gesamt-Endpunkt angepasst:
+
+```python
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+from auth import authentifiziere_service
+
+@app.get('/eg/datenqualitaet/gesamt')
+def eg_datenqualitaet_gesamt(
+    datum: dt.date,
+    service_id: str = Depends(authentifiziere_service),
+):
+    try:
+        ergebnis = pruefe_eg_datenqualitaet(datum)
+        return {'mandant': 'eg-aa', **ergebnis}
+    except (httpx.HTTPError, RuntimeError):
+        raise HTTPException(
+            status_code=502,
+            detail='OctoMesh-Daten konnten nicht geladen werden',
+        )
+```
+
+`service_id` wird aktuell nicht weiter ausgewertet; die Dependency erzwingt die Service-Authentifizierung. Sie **erzwingt noch keine benutzerbezogene RBAC-Regel**.
+
+```bash
+python -m py_compile backend/main.py
+PYTHONPATH=backend python -m unittest discover -s backend -p 'test_*.py' -q
+```
+
+**Beobachtet:** Syntax ohne Fehler, **20 Tests OK**.
+
+### 15.7 Schritte 21.4–21.5 – Reale HTTP-Tests nach Server-Neustart
+
+**Warum:** Unit-Tests allein beweisen noch nicht, dass FastAPI den HTTP-Header korrekt an die Dependency übergibt. Daher wurden beide Wege real getestet. Der Server wurde mit Konfiguration aus ConfigMap/Secret im Namespace `grp-uebung` neu gestartet; siehe **Kapitel 16.3** für den vollständigen sicheren Startbefehl.
+
+```bash
+# Im zweiten Terminal, ohne API-Key:
+curl -sS -i 'http://127.0.0.1:8000/eg/datenqualitaet/gesamt?datum=2026-10-23'
+# Erwartet und beobachtet: HTTP 401, {"detail":"X-API-Key fehlt oder ist falsch"}
+
+# Mit korrekt aus Kubernetes geladenem API-Key:
+API_KEY="$(kubectl --context kind-vsct -n grp-uebung \
+  get secret tagessummen -o jsonpath='{.data.API_KEY}' | base64 -d)"
+curl -sS --max-time 180 \
+  -H "X-API-Key: ${API_KEY}" \
+  -w '\nHTTP-Status: %{http_code}\n' \
+  'http://127.0.0.1:8000/eg/datenqualitaet/gesamt?datum=2026-10-23' \
+  -o /tmp/eg-aa-rbac-test.json
+```
+
+**Beobachtetes Ergebnis:** `HTTP 200`, `mandant: eg-aa`, **16 Zählpunkte**, **36 Anker**, `vollstaendig=36`, `unvollstaendig=0`, `fehler=0`. Ohne Header `HTTP 401`. Der 23.10.2026 war ein normaler Tag mit 96 Zeitintervallen. Die Prüfung bezieht sich auf **Zeitstempel**, nicht auf die inhaltliche Plausibilität aller Stromwerte.
+
+**Sicherheitsdetails:** Shell-Variable `API_KEY` nur für lokalen Test einsetzen, nicht ausgeben. Eine vorhandene Bash-Variable muss **vor** dem `curl`-Aufruf gesetzt sein; `API_KEY=... curl -H "$API_KEY"` kann den alten/leeren Wert einsetzen. Nach dem Test bei Bedarf `unset API_KEY`.
+
+### 15.8 Ergebnis und Grenzen
+
+**Implementiert und getestet:** unabhängige RBAC-Regeln, zentrale technische Service-Authentifizierung, eine umgestellte FastAPI-Route, Tests (20 Unit-Tests und reale HTTP 200/401). **Nicht implementiert:** individuelle Benutzerregistrierung/Anmeldung, OIDC/Session/JWT-Prüfung, Zuordnung von Mitglied zu tatsächlichen Zählpunkten, HTTP-Durchsetzung von `permissions.py`, Login-geschützter Browser-Datenabruf. Eine konkrete AuthN-Strategie ist noch festzulegen; nicht ungeprüft Rollen-Header oder selbst erfundene Client-Identitäten als Sicherheitsnachweis verwenden.
+---
+
+## 16. Betrieb, Wiederanlauf und Diagnose
+
+### 16.1 Umgebung und Unit-Tests
 
 ```bash
 cd ~/projekte/eg-aa
@@ -1317,7 +1378,7 @@ python -m py_compile backend/main.py backend/octomesh_client.py backend/eg_data_
 PYTHONPATH=backend python -m unittest discover -s backend -p 'test_*.py' -v
 ```
 
-### 17.2 Kubernetes-Referenzdienst lokal weiterleiten (separates Terminal)
+### 16.2 Kubernetes-Referenzdienst lokal weiterleiten (separates Terminal)
 
 ```bash
 kubectl --context kind-vsct -n grp-uebung \
@@ -1326,7 +1387,7 @@ kubectl --context kind-vsct -n grp-uebung \
 
 Diese Sitzung läuft weiter und ist **nicht** der FastAPI-Prozess auf Port 8000. `/eg/tagessummen` hängt von dem Forward ab, solange der Client auf `localhost:8082` verweist.
 
-### 17.3 AA_Nexus-FastAPI **mit** OctoMesh-Umgebungsvariablen starten
+### 16.3 EG-AA-FastAPI **mit** OctoMesh-Umgebungsvariablen starten
 
 **Problem im Versuch:** Der verkürzte Uvicorn-Aufruf setzte nur `API_KEY` und erzeugte bei der Gesamtprüfung `HTTP 500 / KeyError: 'OCTO_ASSETS_URL'`. **Lösung:** ConfigMap und Secret **vor Prozessstart** lesen und die Variablen beim Start an Uvicorn weiterreichen. Der folgende Start ist ein reproduzierbarer Entwicklungsbefehl und gibt keine Geheimnisse aus:
 
@@ -1349,7 +1410,7 @@ benoetigt = ('OCTO_ASSETS_URL', 'OCTO_TOKEN_URL', 'OCTO_TENANT',
 fehlen = [name for name in benoetigt if not os.environ.get(name)]
 if fehlen:
     sys.exit('Fehlende Konfiguration: ' + ', '.join(fehlen))
-print('Starte AA_Nexus FastAPI mit OctoMesh-Konfiguration ...', flush=True)
+print('Starte EG-AA FastAPI mit OctoMesh-Konfiguration ...', flush=True)
 os.execvpe(sys.executable, [sys.executable, '-m', 'uvicorn',
     'main:app', '--app-dir', 'backend', '--host', '127.0.0.1',
     '--port', '8000'], os.environ)
@@ -1358,7 +1419,7 @@ PYSTART
 
 **Sicherheit:** `kubectl get secret -o json` darf nicht unbedacht in Logdateien, Screenshots oder GitHub gelangen. Der obige Prozess übernimmt Geheimnisse nur in seinen eigenen Umgebungsblock. In produktiven Umgebungen werden Secrets serverseitig bereitgestellt, nicht manuell aus einem Cluster in eine lokale Shell kopiert.
 
-### 17.4 Geschützte API prüfen (zweites Terminal)
+### 16.4 Geschützte API prüfen (zweites Terminal)
 
 ```bash
 cd ~/projekte/eg-aa
@@ -1390,7 +1451,7 @@ curl -sS -i \
 
 **Shell-Falle aus dem Verlauf:** Nicht `API_KEY="$(...)" curl -H "X-API-Key: $API_KEY" ...` schreiben, weil die Shell die Header-Variable zu früh expandieren kann. Zuerst `API_KEY=...` in eigener Anweisung setzen und danach `curl` ausführen. API-Schlüssel nicht mit `echo` ausgeben.
 
-### 17.5 HTML-Frontend und Browser
+### 16.5 HTML-Frontend und Browser
 
 ```bash
 # Nur zum separaten Frontend-Test, zusätzlich zu FastAPI:
@@ -1405,7 +1466,7 @@ python3 -m http.server 5500 --bind 127.0.0.1
 
 Die FastAPI-Route `/dashboard` liefert mit `FileResponse` die HTML-Datei. Das Frontend zeigt aktuell **fest codierte Demo-Daten**; es ruft keine geschützten Live-API-Daten ab. Keine Keys in HTML oder Browser-JavaScript hinterlegen.
 
-### 17.6 Diagnose „Port 8000 belegt"
+### 16.6 Diagnose „Port 8000 belegt"
 
 ```bash
 ss -ltnp 'sport = :8000'
@@ -1417,25 +1478,194 @@ ss -ltnp 'sport = :8000'
 
 **Beobachtete Fehler:** `Errno 98 address already in use` durch noch laufenden Uvicorn-Prozess, `KeyError: OCTO_ASSETS_URL` nach Start ohne ConfigMap-Variablen, `Internal Server Error` in einer 21-Byte-Datei statt JSON beim fehlgeschlagenen HTTP-500-Test. Nach vollständiger Konfiguration kam `HTTP 200`. `GET /favicon.ico 404` ist nur ein fehlendes Tab-Symbol und für die Funktion unerheblich.
 
-## 18. Frontend, Sicherheit, Fehlerdiagnose und offene Arbeiten
+### 16.7 Lesende Zustandsprüfungen – lokal
 
-### 18.1 Status nach Schritt 20.96–20.98
+```bash
+kind get clusters
+kubectl --context kind-vsct get nodes
+kubectl --context kind-vsct -n grp-uebung \
+  get deployments,pods,services,configmaps,secrets
+```
 
-- `frontend/index.html` liefert eine funktionierende responsive Demo-Oberfläche mit AA_Nexus-Kopfzeile, Kennzahlen (16, 36, 36/36) und exemplarischen Zählpunkten; Screenshot und HTTP 200 wurden gezeigt.
-- `main.py` liefert die Demo-Datei unter `/dashboard` via `FileResponse`; im Browser getestet.
-- Für **spätere** Live-Anbindung muss der Server eine **geprüfte Benutzeridentität** erhalten und die Daten je Benutzer/Zählpunkt filtern. OctoMesh-OAuth-Client-Secret und statischer API-Key bleiben auf dem Server.
-- Ein Rollenmodell mit `admin` (Gesamtübersicht) und `mitglied` (nur zugewiesene `rtId` von Zählpunkten) wurde als `backend/permissions.py` vorgeschlagen. **Stand 20.11.: Speichern und Tests dieses Moduls noch nicht bestätigt.**
-- Eigenes AA_Nexus-Backend lokal, nicht als FH-Fachservice nachgewiesen; keine M2-Abnahme/konforme AIT-Schnittstelle und kein Live-Dashboard.
+### 16.8 Lesende Zustandsprüfungen – FH
 
-### 18.2 Nächste Schritte (für morgen)
+```bash
+kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
+  get deployments,pods,services,configmaps,secrets,ingresses
+kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
+  rollout status deployment/tagessummen --timeout=120s
+kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
+  describe ingress tagessummen
+```
 
-1. Existenz von `backend/permissions.py` prüfen; wenn noch nicht angelegt, Datei und Rollen-Funktionen anlegen.
-2. Unit-Tests für `admin`, zugewiesene und nicht zugewiesene Mitglieder schreiben. **Keine Berechtigung aus unvalidierten Browser-Parametern übernehmen.**
-3. Geeignete Benutzer-Authentifizierung/Session- oder Tokenstrategie mit Kursvorgaben abstimmen; RBAC **serverseitig** an die Endpunkte anbinden. **Vorher keine echten Zählpunktdaten im Dashboard freigeben.**
-4. `/eg/datenqualitaet/gesamt` optimieren (36 separate GraphQL-Abfragen, mögliche Laufzeit-/Timeout-Probleme), Paginierung, Fehlerbehandlung und Metriken ergänzen.
-5. Datenqualität erweitern (Energiewerte/Einheiten/Plausibilität), AIT-Prognosevertrag, M2-Konformitätstest, IMC und FH-Deployment des eigenen Team-Backends planen.
-6. Die aus dem alten Bericht offenen FH-Ingress-/DNS-Probleme und FH-Manifeste separat weiterführen.
+Der `describe ingress`-Befehl kann wegen fehlender Berechtigung zum Auflisten von `EndpointSlices` eine Warnung zeigen. Diese wird nicht automatisch als Ausfall des Dienstes interpretiert.
 
-### 18.3 Beleglage
+### 16.9 Port-Forwarding bei Bedarf
 
-Die Zahlen zu 16 Zählpunkten / 36 Ankern und sämtliche Testresultate in diesem Nachtrag stammen aus der im Gespräch geteilten GraphQL-JSON-Antwort, Terminalausgaben und Dashboard-Screenshots vom 20.11.2026. GraphQL-Abfragen, Shell-Startbefehle und Python-Module entsprechen dem ausgeführten bzw. vom Nutzer bestätigten Stand. Ohne direkten Zugriff auf das WSL-Dateisystem wurde der vollständige lokale Quellcode nicht erneut eingelesen; die Dokumentation beansprucht daher **keinen** vollständigen Repository-Code-Audit.
+```bash
+# FH-Test in einem eigenen Terminal:
+kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
+  port-forward svc/tagessummen 8081:80
+
+# Aus einem weiteren Terminal, ohne API-Key-Ausgabe:
+curl -i http://127.0.0.1:8081/healthz
+curl -i http://127.0.0.1:8081/readyz
+```
+
+Der laufende `port-forward`-Prozess ist ein temporärer Tunnel. Er kann mit `Ctrl+C` beendet werden. Wird der Ziel-Pod neu erstellt, kann es nötig sein, den Tunnel erneut zu starten.
+
+### 16.10 Rückbauoptionen (nur nach ausdrücklicher Entscheidung)
+
+Weder der lokale noch der FH-Cluster muss für eine normale Codeaktualisierung gelöscht werden. Bei einem gewünschten **selektiven Rückbau der eigenen FH-Beispielressourcen** können diese einzeln entfernt werden – **nur mit ausdrücklich bestätigtem Zielcluster und Namespace**:
+
+```bash
+# DOKUMENTATION – NICHT ungeprüft ausführen:
+kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
+  delete ingress tagessummen
+kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
+  delete service tagessummen
+kubectl --kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa \
+  delete deployment tagessummen
+# ConfigMap und Secret nur löschen, wenn sie sicher nicht mehr benötigt werden.
+```
+
+**Niemals:** den bereits bereitgestellten Namespace `grp-eg-aa`, andere Team-Namensräume, FH-Knoten oder fremde Dienste löschen. Lokale destruktive Übungen sind kein zulässiger FH-Betriebsschritt.
+
+### 16.11 Dateien, die nicht nach GitHub gehören
+
+Beispiele für auszuschließende Dateien/Artefakte:
+
+```gitignore
+# Lokale Kubernetes-Zugangsdaten und Secret-Dateien
+.kube/
+*.kubeconfig
+kubeconfig*
+*secret*.env
+.env
+.env.*
+
+# Persönliche Schlüssel und Zertifikate
+*.key
+*.p12
+*.pfx
+
+# Lokale Python-Artefakte
+__pycache__/
+*.pyc
+```
+
+Vor jedem Commit ist mit `git status` und `git diff --cached` zu kontrollieren, dass **keine tatsächlichen Zugangsdaten** enthalten sind. Eine `.gitignore` schützt nicht automatisch Dateien, die bereits in Git aufgenommen wurden.
+
+---
+
+## 17. Historischer FH-Zwischenstand vom 19.11.2026
+
+> **Archivierter Stand (19.11.2026), keine aktuelle To-do-Liste.** Diese Matrix hält den damaligen FH-Deploy-/Ingress-Fortschritt fest. Spätere Ergebnisse für das **eigene lokale** Backend (GraphQL, Dashboard, RBAC und 20 Tests) stehen in Phasen G–I. Offene Fragen und Prioritäten heute stehen allein in Kapitel 19.
+
+### 17.1 Statusmatrix (Stand: 19.11.2026)
+
+| Teilaufgabe | Status | Beleg / Einschränkung |
+|---|---|---|
+| Lehr-Repository/Beispiel identifiziert | **Erledigt** | `beispiele/tagessummen/README.md`, `docs/08-team-energiegemeinschaft.md` |
+| Eigener OctoMesh-Mandant | **Erledigt** | `eg-aa`, GraphQL-Daten erfolgreich verwendet |
+| Lokales kind-Cluster | **Erledigt** | `vsct`, drei Nodes |
+| Lokales Deployment/Service/Secrets | **Erledigt** | Zwei bereite Pods, Secret und ConfigMap |
+| Lokale Tagessummen und Negativtest | **Erledigt** | `200` mit Key, `401` ohne Key |
+| Quota-/Selbstheilungs-/Skalierungsübung | **Erledigt** | Lokal beobachtete Reaktionen |
+| Worker-Ausfalltest | **Erledigt** | Nur lokal; Node wiederhergestellt |
+| Fehlerimage und Rollback | **Erledigt** | 25.10.: 96 statt 100 Intervalle erkannt und zurückgerollt |
+| Readiness-Fehlertest | **Erledigt** | Separater Test-Pod `0/1`, HTTP 503; aufgeräumt |
+| FreeLens-Anbindung | **Erledigt** | kind-Workloads sichtbar |
+| FH-VPN und kubeconfig | **Erledigt** | WSL Mirrored Networking, Clusterzugang, `can-i create deployments=yes` |
+| FH-ConfigMap + Secret | **Erledigt** | `DATA 4` / `DATA 3` im Namespace `grp-eg-aa` |
+| FH-Deployment + Service | **Erledigt** | FastAPI-Pod und Service erfolgreich getestet |
+| FH-End-to-End-API | **Erledigt** | Okt.-Messwerte: `HTTP 200`; Negativtest: `401` |
+| FH-PodSecurity-Konfiguration | **Erledigt, operativ zu beobachten** | Server-Dry-Run ohne Warnung, neuer Pod `1/1 Running` |
+| FH-Ingress-Objekt | **Erledigt** | NGINX Ingress angelegt, Sync-Events |
+| DNS-Auflösung / HTTPS von extern | **Offen** | NXDOMAIN, TCP/443-Timeout gegen Controller-Adresse |
+| Erneuter E2E-Test nach Security-Rollout | **Noch ausständig** | Neuer Pod läuft; vollständiger Tagessummen-Test nach Austausch nicht eigens protokolliert |
+| AIT-Datenvertrag, rollenbasierte API | **Offen** | Beispiel-Key allein nicht ausreichend |
+| Dash0/OpenTelemetry, Betriebsnachweise | **Offen** | Keine durchgängige Observability nachgewiesen |
+| Eigener EG-Fachbackend-Code | **Teilweise / offen** | Referenz-FastAPI verwendet; eigene Geschäftslogik/Datenverträge fehlen |
+| AIT-Prognose, Tagesposition, IMC, Abrechnung | **Offen** | Noch keine durchgängige fachliche Integration |
+
+### 17.2 Damalige Prioritäten (historisch)
+
+**Priorität 1 – FH-Ingress/DNS klären:** Das Infra-Team sollte die vorgesehenen DNS- und Routing-Einstellungen für `eg-aa-tagessummen.machasing.com` bestätigen. Die fehlende Erreichbarkeit sollte nicht durch Änderungen am funktionierenden FastAPI-Deployment überdeckt werden.
+
+**Priorität 2 – Deployment reproduzierbar versionieren:** Die FH-Variante des Deployments mit `securityContext` und ohne lokalen 30-Sekunden-Tolerations-Test ist als **nicht geheime** Datei bzw. Kustomize-Overlay ins eigene Team-Repository zu übernehmen. Die momentanen Dateien unter `/tmp` sind nur lokale Arbeitsdateien und können verloren gehen.
+
+**Priorität 3 – Funktionsprüfung nach Rollout wiederholen:** Der neue gehärtete Pod soll erneut über `/healthz`, `/readyz` und den geschützten `/tagessummen`-Endpunkt geprüft werden. Ein Test ohne API-Key muss weiterhin `401` ergeben.
+
+**Priorität 4 – M2-Fachvertrag mit AIT:** Es sind gemeinsam **Felder, Einheiten (kWh), Zeitzone, Datumssemantik, Tagesprofil/Tagessumme, Fehlwerte, Qualität, Nachmeldungen, Fehlerstatus und Beispieldaten** festzulegen. Mit AIT ist ein tatsächlich autorisierter Client und ein Konformitätstest zu vereinbaren.
+
+**Priorität 5 – Rollenbasierte Zugriffskontrolle:** Statt des statischen Übungskeys muss der Dienst die Identität/Rolle/Mandantenzugehörigkeit des Aufrufers prüfen (oder eine vom Projekt vorgesehene Pipeline mit `requiredRoles` verwenden). Zugriffe ohne Berechtigung und mit fremden EG-Rechten müssen verlässlich abgelehnt und nachweisbar protokolliert werden.
+
+**Priorität 6 – Weiterer EG-Funktionsumfang:** Zählpunkt-/Mitgliederdaten, Datenqualität, Tagesbilanz, AIT-Prognose, eine Tagesposition pro Liefertag, IMC-Datenvertrag und -Integration, Mitgliederabrechnung, Dashboard, automatisierte Tests sowie OpenTelemetry/dash0 sind als eigenständige Arbeitspakete zu planen und umzusetzen.
+
+### 17.3 Damalige FH-Abnahmekriterien (historisch)
+
+- [x] `cloud-lab` ist mit persönlicher kubeconfig über FH-VPN erreichbar.
+- [x] Dienst läuft im eigenen Namespace `grp-eg-aa`.
+- [x] Container startet als Nicht-Root und besteht Kubernetes-Readiness.
+- [x] Service beantwortete authentifizierte Tagessummen-Anfragen über `port-forward`.
+- [x] Unauthentifizierte Abfrage wurde mit `401` abgelehnt.
+- [ ] HTTPS-FQDN wird korrekt aufgelöst und ein **gültiges TLS-Zertifikat** nachgewiesen.
+- [ ] HTTPS-Anfrage erreicht den Ingress und liefert `/healthz` mit HTTP 200.
+- [ ] AIT-Datenvertrag und Rollenprüfung sind umgesetzt, dokumentiert und mit dem Partnerteam getestet.
+- [ ] End-to-End-Logs/Traces/Metriken sind in der vorgegebenen Observability-Lösung nachgewiesen.
+
+---
+
+## 18. Quellen und Nachweisgrenzen
+
+**Primärquellen – Aufgabenstellung und Beispielcode:**
+
+- [Lehr-Repository `fhgerald/vsct-lab-studierende`](https://github.com/fhgerald/vsct-lab-studierende)
+- [Tagessummen-Referenz und kind-Übungen](https://github.com/fhgerald/vsct-lab-studierende/tree/main/beispiele/tagessummen)
+- [Team Energiegemeinschaft: Aufgaben und M2](https://github.com/fhgerald/vsct-lab-studierende/blob/main/docs/08-team-energiegemeinschaft.md)
+- [Kubernetes und Namespace-Schichten](https://github.com/fhgerald/vsct-lab-studierende/blob/main/docs/12-kubernetes-uebersicht.md)
+- [Zugang und Umgang mit Geheimnissen](https://github.com/fhgerald/vsct-lab-studierende/blob/main/docs/02-zugang.md)
+- Zusätzlich verwendete Lehrunterlagen: Energiegemeinschaften, FH-Cluster-Onboarding, Kubernetes-Übungsunterlagen und Vorlesungsskript *Verteilte Systeme und Cloud-Technologien* WS 2026/27.
+
+**Beweisgrundlage dieser Dokumentation:** Die als „nachgewiesen“ gekennzeichneten Ergebnisse wurden aus den im Arbeitsverlauf geteilten `kubectl`-, `docker`-, `curl`- und PowerShell-Ausgaben sowie Screenshots übernommen. **Nicht jedes später beispielhaft gezeigte Kommando ist ein wortwörtlicher Mitschnitt aus einem Shell-Verlauf.** Beispielsweise sind die Befehle zur erneuten Secret-Erstellung und zur Pod-Selbstheilung ausdrücklich als sichere Reproduktionsbeispiele dargestellt. Nicht vorliegende Log-Dateien, Manifeststände und genaue Zeitmessungen wurden nicht erfunden.
+
+**Historischer FH-Abschlussbefund (Stand 19.11.2026):** Die Container-/Kubernetes-Bereitstellung und der fachliche OctoMesh-Abruf sind bis einschließlich eines erfolgreichen FH-API-Funktionstests nachgewiesen. Der nächste technische Engpass ist die **noch nicht funktionierende DNS-/HTTPS-Erreichbarkeit** der bereits angelegten Ingress-Adresse. Die eigentliche M2-Rollen-/AIT-Integration sowie weitere EG-Fachanforderungen sind noch offen.
+
+
+---
+
+## 19. Aktueller Entwicklungsstand, GitHub und nächste Schritte
+
+### 19.1 GitHub und Sicherungsstand
+
+Das **private** GitHub-Repository wurde am 20.11.2026 erfolgreich erstellt und mit dem lokalen Projekt verbunden:
+
+```text
+origin https://github.com/akhlas2/eg-aa.git (fetch)
+origin https://github.com/akhlas2/eg-aa.git (push)
+```
+
+Der erste Upload von **15 Dateien** erfolgte erfolgreich, Branch `main`, Root-Commit **`d5d35cf`**. `.gitignore` wurde kontrolliert (`.venv/`, `__pycache__/` ignoriert), Dateiliste und Namensmuster möglicher Secrets geprüft. Zuletzt waren die Schritte 21.1–21.5 **noch nicht** neu committet/gepusht (kein entsprechender Nachweis aus der Unterhaltung).
+
+```bash
+cd ~/projekte/eg-aa
+git status --short
+git diff --stat
+git diff --cached --stat
+# Vor dem Commit Datei-Inhalt auf harte Geheimnisse prüfen.
+# Nur geprüfte, benötigte Dateien stagen, dann committen und pushen.
+```
+
+### 19.2 Fortsetzung beim nächsten Termin
+
+1. **Änderungen sichern:** Git-Status, Dokumentationsänderungen, `auth.py`, `permissions.py`, `test_auth.py`, `test_permissions.py`, `main.py` kontrollieren; dann Commit und `git push`.
+2. **Authentifizierung für echte Benutzer konzipieren:** Kurs-/OctoMesh-Vorgaben für OIDC, Session oder IdP ermitteln; Rollen und Zählpunkt-Zuordnung nur aus **serverseitig validierter** Identität ableiten.
+3. **RBAC in geeignete HTTP-Routen integrieren:** Admin-Zugriff auf Gesamtübersicht, Mitgliederzugriff nur auf erlaubte Zählpunkt-rtIds. Bei Ankerabfrage muss der angefragte Anker sicher einem berechtigten Zählpunkt zugeordnet werden.
+4. **Integrationstests:** HTTP 401 ohne Anmeldung, 403 bei fehlender Berechtigung, 200 mit authentifizierter Berechtigung; keine Energiedaten bei Zugriff ohne ausreichende Rechte.
+5. **Dashboard-Liveanbindung erst danach:** echte Daten nicht über API-Key im Browser-JavaScript offenlegen.
+6. **Fachliche Arbeit:** Plausibilitätsprüfung der Messwerte; AIT-Prognosevertrag und M2-Schnittstelle, IMC-Handel, Mitgliederabrechnung; eigenes Deployment und FH-Ingress separat weiterverfolgen.
+
+### 19.3 Terminologie und Nachweistreue
+
+Projektname ab diesem Dokumentationsstand: **EG-AA** (keine Verwendung des früheren Projektnamens mehr). Historische Git-Commits/Dateiinhalte und Frontend-Titel können noch den alten Namen enthalten – diese sind **nicht automatisch durch die Dokumentation geändert**. Alte Zeitangaben und damalige Aussagen bleiben als historische Beobachtungen lesbar; **Phasen G–I und Kapitel 19** enthalten den aktuellen Entwicklungsstand.

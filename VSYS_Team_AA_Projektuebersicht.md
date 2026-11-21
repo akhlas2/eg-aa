@@ -1,111 +1,116 @@
-# VSYS WS 2026/27 – Projektübersicht Team AA
+# EG-AA – Projektübersicht
 
-> **Stand:** 20. November 2026 · **FH Salzburg** · **Team:** AA / AA_Nexus  
-> **OctoMesh-Mandant:** `eg-aa` · **Lokaler Cluster:** `vsct` / Kontext `kind-vsct` / Namespace `grp-uebung`  
-> **FH-Cluster:** `cloud-lab` / Namespace `grp-eg-aa`  
-> **Status:** FH-Referenzdienst betriebsfähig (HTTPS-Ingress offen); zusätzlich eigenes lokales AA_Nexus-FastAPI-Backend, GraphQL-Ankerermittlung, Zeitstempel-Datenqualitätsprüfung und Demo-Dashboard funktionsfähig. AIT/IMC, rollenbasierte Authentifizierung und M2-Abnahme offen.
+**Lehrveranstaltung:** Verteilte Systeme und Cloud-Technologien · **FH Salzburg** · **Team:** AA  
+**Mandant:** `eg-aa` · **Stand:** 21.11.2026 · **Repository:** [akhlas2/eg-aa](https://github.com/akhlas2/eg-aa)
 
-**Ausführlicher technischer Bericht:** [VSYS_Team_AA_Technische_Dokumentation.md](VSYS_Team_AA_Technische_Dokumentation.md) – chronologischer Bericht mit Konfigurationen, ausgeführten und reproduzierbaren Befehlen, Testergebnissen, Ursachenanalyse und nächsten Schritten. Für GitHub sollen **beide Markdown-Dateien im gleichen Ordner** liegen. Einstieg: [README.md](README.md). Neue Erkenntnisse aus Schritt 20 sind in Abschnitt 7 und im technischen Bericht ab Abschnitt 14 enthalten.
+## 1. Auftrag und Zusammenarbeit
 
-## 1. Fachlicher Auftrag
+Die Energiegemeinschaft (EG) verarbeitet historische 15-Minuten-Messdaten, prüft deren Qualität und stellt daraus verwertbare Tagesprofile bzw. Tagessummen bereit. Darauf aufbauend sind Tagespositionen, Prognoseintegration, Handel und Mitgliederabrechnung vorgesehen.
 
-Für die Energiegemeinschaft AA wurde der Mandant `eg-aa` verwendet. Die Gemeinschaft soll Stammdaten und Zählpunkte verwalten, historische 15-Minuten-Messwerte prüfen, Tagesprofile/Tagessummen für AIT bereitstellen, aus AIT-Prognosen eine Tagesposition pro Liefertag ableiten, diese mit IMC-Handelsplattformen austauschen und die Mitgliederabrechnung samt Dashboard, Security und Observability bereitstellen.
+| Beteiligte | Verantwortung / Schnittstelle |
+|---|---|
+| **EG-AA** | Zählpunkte und Datenqualität, geschützte EG-APIs, Tagesposition, spätere Mitgliederabrechnung |
+| **OctoMesh** | Mandant `eg-aa`, Messdaten, Stammdaten und GraphQL-Zugriff |
+| **AIT** | Prognose-Dienst; Datenvertrag und technische Einbindung noch abzustimmen |
+| **IMC** | Handelsplattform; Angebots-/Bedarfspositionen und Marktabwicklung später zu integrieren |
+| **INFRA** | FH-Kubernetes, DNS/Ingress und gemeinsame Infrastruktur |
 
-**Wichtige Arbeitsteilung:** Die Lehr-/OctoMesh-Plattform stellt Daten, Simulation und D+1-Verteilung bereit. Die EG-Gruppe verantwortet ihre eigenen Dienste, Qualitätskontrollen und Schnittstellen. INFRA betreibt das gemeinsame Kubernetes-Cluster und stellt die Infrastruktur für Deployments, DNS/Ingress und Observability zur Verfügung. AIT liefert Prognosen; IMC betreibt Handelsplattformen.
+**Wichtig:** Der Tagessummen-Dienst aus den Lehrbeispielen ist eine **technische Referenz**, noch kein vereinbarter AIT/M2-Datenvertrag.
 
-**Primärquellen:** [Team-Aufgaben EG](https://github.com/fhgerald/vsct-lab-studierende/blob/main/docs/08-team-energiegemeinschaft.md), [Tagessummen-Workshop](https://github.com/fhgerald/vsct-lab-studierende/blob/main/beispiele/tagessummen/README.md) und [Kubernetes-Aufbau](https://github.com/fhgerald/vsct-lab-studierende/blob/main/docs/12-kubernetes-uebersicht.md).
+## 2. Architektur und Umgebungen
 
-## 2. Implementierter technischer Datenfluss
+Es gibt **zwei getrennte Implementierungsstände**:
 
 ```mermaid
 flowchart LR
-    CLIENT[Client / curl] -->|lokales Port-Forward| FS[FH-Service tagessummen]
-    FS --> BE[FastAPI-Pod\nNamespace grp-eg-aa]
-    BE -->|OAuth / GraphQL| OCTO[OctoMesh\neg-aa]
-    AIT[AIT-Prognose] -.->|Rollenvertrag noch offen| BE
-    WEB[HTTPS-Ingress\nDNS/443 noch offen] -.-> FS
+    subgraph Lokal[Lokale Entwicklung – WSL2 / kind-vsct]
+      D[EG-AA FastAPI\n127.0.0.1:8000]
+      U[HTML-Demo\n/dashboard]
+      K[tagessummen Referenz\nNamespace grp-uebung]
+      U --> D
+    end
+    subgraph FH[FH-Cluster cloud-lab]
+      I[Ingress\nDNS/HTTPS offen]
+      S[tagessummen Referenz\nNamespace grp-eg-aa]
+      I -.-> S
+    end
+    O[OctoMesh\nMandant eg-aa]
+    D -->|OAuth + GraphQL| O
+    K -->|OAuth + GraphQL| O
+    S -->|OAuth + GraphQL| O
+    A[AIT / Prognosen] -.->|Vertrag offen| D
+    M[IMC / Handel] -.->|Integration offen| D
 ```
 
-- Der Beispielcode aus `beispiele/tagessummen` wurde zuerst lokal als Docker-Image gebaut und im kind-Cluster getestet.
-- Anschließend wurde das bereits über GHCR abrufbare Referenzimage `ghcr.io/fhgerald/tagessummen:1.0` im FH-Cluster eingesetzt.
-- Im FH-Cluster wurden `ConfigMap`, `Secret`, `Deployment`, `Service` und `Ingress` jeweils im Namespace `grp-eg-aa` eingerichtet.
-- Der geschützte Datenendpunkt lieferte über `kubectl port-forward` echte Tagesregisterdaten für `eg-aa` mit `HTTP 200`. Ohne API-Key wurde `HTTP 401` ausgegeben.
-- Die vorhandene API-Key-Prüfung ist **kein Ersatz** für eine rollenbasierte M2-Schnittstelle.
+- **Lokal (kind):** Kubernetes-Kontext `kind-vsct`, Namespace `grp-uebung`, Referenzdienst `tagessummen` mit zuletzt **2/2** bereiten Pods. Eigenes Teambackend läuft bei Bedarf als separater lokaler Uvicorn-Prozess auf `127.0.0.1:8000`.
+- **FH:** Cluster `cloud-lab`, Namespace `grp-eg-aa`. Der **Referenzdienst** wurde über Port-Forward erfolgreich abgefragt. Ingress erstellt, externe DNS-/HTTPS-Erreichbarkeit **nicht nachgewiesen**.
+- **Nicht zu verwechseln:** OctoMesh-**Mandant** `eg-aa` ≠ Kubernetes-**Namespace** `grp-eg-aa` ≠ lokaler Namespace `grp-uebung`.
 
-## 3. Nachgewiesener Status
+Das eigene EG-AA-Backend wurde **noch nicht nachweislich in den FH-Cluster deployt**.
 
-| Bereich | Stand |
+## 3. Nachgewiesene Ergebnisse
+
+| Bereich | Stand / Ergebnis |
 |---|---|
-| Eigener OctoMesh-Mandant `eg-aa` | **Erledigt**; Datenabruf erfolgreich |
-| Technischer Client / erneuertes Secret | **Eingerichtet**; sicher in Kubernetes Secrets verwendet |
-| Lokales Kubernetes `vsct` | **Erledigt**; drei kind-Nodes, Namespace `grp-uebung` |
-| Lokales FastAPI-Deployment | **Erledigt**; zwei bereite Pods, Service, ConfigMap, Secret |
-| `healthz`, `readyz`, `/tagessummen` lokal | **Erledigt**; echte Daten und Negativtest |
-| Quota, Selbstheilung, Skalierung, Worker-Ausfall | **Lokal getestet** |
-| Fehlerhaftes Update / DST / Rollback | **Lokal getestet**; am 25.10.2026: 96 falsche statt 100 korrekter Intervalle |
-| Readiness-Test mit falschem Secret | **Lokal getestet**; `READY 0/1`, HTTP 503; wieder bereinigt |
-| FreeLens | **Eingerichtet**; lokale Workloads sichtbar |
-| FH-Zugang über WSL2 und Cisco AnyConnect | **Funktioniert**; Mirrored Networking aktiviert |
-| FH-Namespace `grp-eg-aa` | **Erreichbar**; Deployments dürfen angelegt werden |
-| FH ConfigMap/Secret | **Eingerichtet**; 4 bzw. 3 Datenfelder |
-| FH Deployment/Service | **Erledigt**; Pod bereit, Service über Port-Forward getestet |
-| FH SecurityContext | **Ergänzt**; neues Rollout erfolgreich (`1/1 Running`) |
-| FH Ingress | **Erstellt**; `eg-aa-tagessummen.machasing.com` |
-| DNS und externe HTTPS-Erreichbarkeit | **Offen**; NXDOMAIN und Timeout auf Ingress-Adresse `172.30.0.200:443` |
-| Rollenbasierte AIT-Schnittstelle und Prognosevertrag | **Offen** |
-| AIT-/IMC-Integration, Abrechnung, Observability | **Offen** |
-| Eigenes AA_Nexus-Backend (lokal) | **Läuft**; `127.0.0.1:8000`, FastAPI, OctoMesh-Client |
-| GraphQL-Ermittlung der EnergyMeasurement-Anker | **Nachgewiesen**; 36 Anker auf 16 Zählpunkten |
-| Datenqualitätsprüfung der Zeitstempel | **Nachgewiesen**; 36/36 vollständig für 23.10.2026 |
-| Eigenes Dashboard | **Demo lokal**; `/dashboard` auf Port 8000, noch keine Live-Anbindung |
-| RBAC | **Entwurf**; Rollenmodell vorgeschlagen, noch nicht als durchgesetzte AuthZ eingebunden |
+| Lokales Kubernetes und Übungen | kind-Cluster, Deployment/Service, Quota, Skalierung, Selbstheilung, Fehler-Rollback und Readiness geprüft |
+| FH-Kubernetes | VPN/WSL-Zugriff, Referenz-Deployment, Service, Secret/ConfigMap und PodSecurity-Härtung erprobt |
+| FH-Ingress | Ressource angelegt; DNS/externes HTTPS noch offen |
+| GraphQL-Ankerermittlung | **16 Zählpunkte** (12 Verbraucher, 4 PV-Erzeuger), **36 Messdaten-Anker**, jeweils mit Parent-Zuordnung |
+| Datenqualität | Für **23.10.2026**: 36 Reihen × 96 Zeitstempel; fehlend **0**, doppelt **0**, ungültig **0** |
+| Datenqualitäts-API | `/eg/datenqualitaet` und `/eg/datenqualitaet/gesamt` lokal erfolgreich getestet |
+| Technische Authentifizierung | `auth.py`, API-Key als FastAPI-Dependency im Gesamt-Endpunkt; HTTP **200 mit**, **401 ohne** Key |
+| Rollenregeln | `permissions.py`: `admin` und `mitglied`; nur lokale Prüflogik, **keine** echte Benutzeranmeldung |
+| Automatisierte Tests | **20 Unit-Tests** erfolgreich (11 Datenqualität, 5 RBAC, 4 technische Authentifizierung) |
+| Dashboard | HTML-Demo unter `/dashboard`, **noch ohne Live-Daten** |
+| GitHub | Initialer Commit `d5d35cf` auf `main` gepusht; neuere Änderungen noch separat zu committen |
 
-## 4. Wichtige technische Namen und Pfade
+**Qualitätsgrenze:** Die Ergebnisse bestätigen die **Zeitstempelstruktur**, nicht die Korrektheit von Energie-/Leistungswerten, Einheiten oder Abrechnungsdaten.
 
-| Objekt | Name / Pfad |
+## 4. GraphQL: Was wurde gesucht und warum?
+
+Ziel war eine **dynamische** Ermittlung der Messdaten-Anker, damit ihre IDs nicht einzeln im Python-Code stehen müssen.
+
+| Frage | Vorgehen / Erkenntnis |
 |---|---|
-| Projektarbeitsverzeichnis Referenz in WSL | `~/projekte/vsct-lab-studierende/beispiele/tagessummen` |
-| Eigenes Teamprojekt in WSL | `~/projekte/eg-aa` |
-| Lokale kubeconfig | `~/.kube/config` (Context `kind-vsct`) |
-| FH-kubeconfig | `~/.kube/cloud-lab` (Context `cloud-lab`, Rechte `600`) |
-| Namespace lokal | `grp-uebung` |
-| Namespace FH | `grp-eg-aa` |
-| FastAPI-Deployment / Service | `tagessummen` |
-| ConfigMap / Secret | `tagessummen` |
-| Original Deployment | `k8s/20-deployment.yaml` |
-| Gehärtetes FH-Deployment, temporär | `/tmp/tagessummen-fh.yaml` |
-| Original Ingress-Vorlage | `cluster/ingress.yaml` |
-| FH-Ingress-Entwurf, temporär | `/tmp/tagessummen-ingress-fh.yaml` |
-| Lokaler Test-Tunnel | `localhost:8080` |
-| FH-Test-Tunnel | `localhost:8081` |
-| Geplanter HTTPS-Hostname | `eg-aa-tagessummen.machasing.com` |
+| Wie heißen GraphQL-Felder und Rückgabetypen? | Schema-Introspection mit `__type(...)` |
+| Wie finde ich alle Messdaten-Anker? | `runtime.basicEnergyEnergyMeasurement(first: 100)` → `totalCount: 36`, keine Folgeseite |
+| Zu welchem Zählpunkt gehört ein Anker? | `parent(ckTypeIds: ["EnergyCommunity/Consumer", "EnergyCommunity/Producer"])`; passende Union-Fragmente für Erzeuger/Verbraucher |
+| Wie prüfe ich ein Register? | Zeitstempel aus dem Stream-Archiv pro `rtId` und lokalem Kalendertag (UTC-Grenzen, Zeitzone `Europe/Vienna`) laden |
+| Wie bewerte ich Vollständigkeit? | Erwartete Intervalle **92/96/100** je nach Sommer-/Winterzeitumstellung; fehlende/doppelte/ungültige Zeitstempel getrennt zählen |
 
-Für eine spätere dauerhafte Reproduzierbarkeit sollten die nicht geheimen FH-Manifeste aus `/tmp` in ein versioniertes Team-Verzeichnis übernommen werden. Die geheimen Daten dürfen dabei nicht mitkopiert werden.
+Die **tatsächlich funktionierenden GraphQL-Abfragen und ihre Ergebnisse** stehen in der [technischen Dokumentation, Kapitel 12](VSYS_Team_AA_Technische_Dokumentation.md#12-phase-g-graphql-recherche-und-messdaten-zuordnung). Hier werden sie nicht nochmals vollständig wiederholt.
 
-## 5. Nächste Schritte
+## 5. Entwicklungsstand und nächste Aufgaben
 
-1. **Externe Erreichbarkeit mit dem Infra-Team klären:** Der Ingress-Controller hat die Adresse `172.30.0.200` gemeldet, jedoch war der gewünschte DNS-Name weder in WSL noch unter Windows auflösbar und TCP/443 über FH-VPN nicht erreichbar. Die vom Infra-Team vorgesehene DNS-/Frontend-IP und Netzwerkfreigabe sind abzuklären.
-2. **FH-Manifeste versionieren:** Gehartetes Deployment ohne lokale Fehlerübungs-Tolerations und Team-AA-Ingress als eigene, nicht geheime YAML-Dateien sichern.
-3. **Funktion nach dem Security-Rollout erneut prüfen:** `/healthz`, `/readyz`, `/tagessummen` und Negativtest `401` noch einmal am aktuellen Pod durchführen.
-4. **M2 mit AIT vereinbaren und umsetzen:** Felder, Datumsgrenzen, Register, Einheiten, Datenqualität, Tagesprofil, Fehlerfälle, Beispielantworten, Testclient und **rollenbasierte Autorisierung**. Der statische `X-API-Key` ist nur ein Lehrbeispiel.
-5. **Eigenes EG-Backend sicher anbinden:** Dashboard aktuell nur Demo; benutzerbezogene Authentifizierung/RBAC und Zählpunktberechtigungen serverseitig einführen, bevor Live-Daten im Browser sichtbar werden.
-6. **Fachliche EG-Funktionen erweitern:** Plausibilitätsprüfung der Energiewerte, Tagesbilanz, AIT-Prognose, Tagesposition und Handel mit IMC, Mitgliederabrechnung, Dashboard-Liveanbindung, Tests und dash0/OpenTelemetry.
+**Zuletzt nachgewiesen:** Der Gesamt-Endpunkt verwendet `Depends(authentifiziere_service)`. Ohne Schlüssel liefert er **401**, mit gültigem Schlüssel **200** und die Prüfung der **36** Anker. Die neuen RBAC- und Authentifizierungsregeln sind mit insgesamt **20 erfolgreichen Unit-Tests** abgesichert.
 
-## 6. Sicherheits- und Betriebsregeln
+**Prioritäten:**
 
-Zugangsdaten, private kubeconfig, Client-Secret, Token und API-Key dürfen weder in Markdown-Dateien noch in GitHub veröffentlicht werden. Die reale FH-kubeconfig verbleibt ausschließlich in WSL im geschützten Benutzerverzeichnis. Das lokale Secret und die FH-Kopie sind getrennte Kubernetes-Ressourcen und werden nicht automatisch synchronisiert.
+1. **Sicherheitsarchitektur:** Individuelle Authentifizierung festlegen; Benutzeridentität verifizieren; RBAC und zählpunktgenaue Filter **serverseitig** in echte API-Endpunkte integrieren. Der Service-Key reicht dafür nicht aus.
+2. **Fachliche Datenqualität:** Energiewerte und Einheiten prüfen, fehlende/nachgemeldete Datensätze behandeln und M2-Datenvertrag mit AIT vereinbaren.
+3. **Dashboard:** Erst nach Umsetzung einer angemessenen Anmeldung Live-Daten statt Demo-Werten anzeigen.
+4. **FH-Betrieb:** Nicht geheime Deployment-/Ingress-Manifeste versionieren, DNS/HTTPS mit INFRA klären, Referenzdienst nach Security-Rollout erneut prüfen und das eigene Backend kontrolliert deployen.
+5. **Fachintegration:** AIT-Prognosen, Tagespositionen, IMC-Handel, Mitgliederabrechnung, Logs/Traces/Metriken.
+6. **Versionsstand:** Neue Python-Dateien und aktualisierte Dokumentation prüfen, committen und nach GitHub pushen.
 
-Bei `kubectl` wird das Ziel stets explizit angegeben: **lokal** über `--context kind-vsct -n grp-uebung`; **FH** über `--kubeconfig="$HOME/.kube/cloud-lab" -n grp-eg-aa`. Destruktive Knotenausfall-/Quota-Übungen dürfen nur im lokalen kind-Cluster durchgeführt werden. Das FH-Namespace `grp-eg-aa` wird **nicht gelöscht oder neu angelegt**.
+## 6. Arbeitsverzeichnisse und Sicherheit
 
-**Abschließende Einordnung:** Die technische Bereitstellung und ein vollständiger Datenabruf über den FH-Service wurden gezeigt. Der HTTPS-Ingress ist angelegt, aber noch nicht erfolgreich von außen aufgerufen worden. Die fachliche M2-Schnittstelle einschließlich Rollenprüfung und AIT-Abnahme steht aus.
+| Gegenstand | Pfad / Wert |
+|---|---|
+| Eigenes EG-AA-Projekt | `~/projekte/eg-aa` |
+| Lehr-/Referenzprojekt | `~/projekte/vsct-lab-studierende/beispiele/tagessummen` |
+| Python-Umgebung | `~/projekte/eg-aa/.venv` |
+| Lokaler kind-Kontext / Namespace | `kind-vsct` / `grp-uebung` |
+| FH-kubeconfig / Namespace | `~/.kube/cloud-lab` / `grp-eg-aa` |
+| Lokale eigene API | `http://127.0.0.1:8000` |
+| Demo-Oberfläche | `http://127.0.0.1:8000/dashboard` |
+| Repository | `https://github.com/akhlas2/eg-aa.git` |
 
+**Sicherheitsregeln:** Zugangsdaten nur über geschützte Konfiguration/Umgebungsvariablen verwenden; keine Secrets oder privaten kubeconfigs committen. Kubernetes-Befehle stets mit eindeutiger Cluster-/Namespace-Angabe ausführen. Destruktive Übungen ausschließlich im lokalen kind-Cluster.
 
-## 7. Ergänzung vom 20.11.2026 – eigenes Teamprojekt / Schritt 20
+## 7. Weiterführende Dokumentation
 
-**Kurzfassung:** In `~/projekte/eg-aa` entstand neben dem bereits im FH-Cluster laufenden **Referenzdienst** eine **eigene lokale** FastAPI-Anwendung. Ziel der längeren GraphQL-Untersuchung war, die Anker-IDs der Messreihen nicht fest im Code hinterlegen zu müssen: Zunächst wurde ein einzelner Zeitstempelstrom für Haushalt 012 geprüft; dann wurden über GraphQL-Schema-Introspektion die `EnergyMeasurement`-Anker und ihre Parent-Verbindungen ermittelt. Ergebnis: **36 Messdaten-Anker mit genau je einem Parent an 16 Zählpunkten** (12 Verbraucher, 4 PV-Erzeuger). Die gesamte Zeitstempelprüfung für den 23.10.2026 ergab **36 vollständige Reihen mit je 96 Zeitstempeln**, ohne Fehl-/Doppel-/ungültige Intervalle. Die Ergebnisse wurden über eigene geschützte lokale FastAPI-Endpunkte (`200` mit gültigem API-Key, `401` ohne) geprüft. Eine Demo-Weboberfläche wird bereits über `http://127.0.0.1:8000/dashboard` von FastAPI ausgeliefert, enthält aber noch keine Live-Daten.
-
-**Wichtig:** Das neue Backend ist **noch nicht nachweislich auf dem FH-Cluster deployt**. Lokaler API-Key-Schutz ist kein RBAC; Benutzerlogin und zählpunktgenaue Freigaben fehlen. Qualitätsstatus beschreibt **Zeitstempel**, nicht Richtigkeit, Einheit oder Plausibilität der Energie-/Leistungswerte. Der alte FH-Ingress-Blocker besteht unabhängig von diesem lokalen Fortschritt.
-
-**Dateien:** `backend/main.py`, `backend/octomesh_client.py`, `backend/data_quality.py`, `backend/eg_data_quality.py`, `backend/tagessummen_client.py`, Tests unter `backend/test_*.py`, `frontend/index.html`. Eine Datei `backend/permissions.py` wurde zum Schluss als nächster Arbeitsschritt vorgeschlagen; das Speichern oder Testen wurde **noch nicht bestätigt**.
-
-**Weiterlesen:** [Abschnitt 14 bis 18 des technischen Berichts](VSYS_Team_AA_Technische_Dokumentation.md#14-phase-g--eigenes-lokales-eg-aa-backend-schritt-20) mit Architektur, GraphQL-Abfragen, Testausgaben, Befehlen und Fehlerdiagnosen.
+- [Technische Dokumentation](VSYS_Team_AA_Technische_Dokumentation.md): Phasen A–I, Befehle, GraphQL, Tests und Wiederanlauf (insbesondere **Kapitel 12, 15 und 16**).
+- [GitHub-Anleitung](GITHUB_UPLOAD.md): sichere Prüfung von Änderungen und Aktualisierung des bestehenden Repositories.
+- [Tagessummen-Referenzprojekt](https://github.com/fhgerald/vsct-lab-studierende/tree/main/beispiele/tagessummen)
+- [Aufgaben der Energiegemeinschaft](https://github.com/fhgerald/vsct-lab-studierende/blob/main/docs/08-team-energiegemeinschaft.md)
